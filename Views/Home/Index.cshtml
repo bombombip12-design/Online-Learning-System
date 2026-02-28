@@ -1,0 +1,90 @@
+@model List<FinalASB.ViewModels.ClassViewModel>
+@{
+    ViewData["Title"] = "Trang chủ";
+    Layout = "_DashboardLayout";
+}
+
+
+@if (Model == null || !Model.Any())
+{
+    <div class="dashboard-empty-state">
+        <i class="fas fa-folder-open"></i>
+        <h4>Bạn chưa tham gia lớp học nào</h4>
+        <p>Tạo lớp học mới hoặc tham gia bằng mã lớp học để bắt đầu</p>
+    </div>
+}
+else
+{
+    <div class="dashboard-classes-container">
+        <div class="dashboard-class-grid" id="classGrid">
+            @{
+                var colors = new[] { "orange", "green", "blue", "purple", "red" };
+                var colorIndex = 0;
+            }
+            @foreach (var classItem in Model)
+        {
+            var colorClass = colors[colorIndex % colors.Length];
+            colorIndex++;
+            var ownerInitials = !string.IsNullOrEmpty(classItem.OwnerName) 
+                ? classItem.OwnerName.Split(' ').Last().Substring(0, 1).ToUpper() 
+                : "U";
+            <div class="dashboard-class-card" data-role="@classItem.UserRole">
+                <a href="@Url.Action("Details", "Classes", new { id = classItem.Id })" class="class-card-header-link">
+                    <div class="class-card-header-new @colorClass">
+                        <div class="class-header-content">
+                            <div class="class-header-info">
+                                <h3 class="class-card-title-main">@classItem.ClassName</h3>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                <div class="class-card-body-new" onclick="event.stopPropagation();">
+                    <div class="class-card-info">
+                        @if (!string.IsNullOrEmpty(classItem.Description))
+                        {
+                            <p class="class-card-description">@classItem.Description</p>
+                        }
+                        <div class="class-card-meta">
+                            <div class="class-card-teacher">
+                                <i class="fas fa-user-tie"></i>
+                                <span>@classItem.OwnerName</span>
+                            </div>
+                            <div class="class-card-code">
+                                <i class="fas fa-key"></i>
+                                <span>@classItem.JoinCode</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="class-card-actions" onclick="event.stopPropagation();">
+                        <div class="dropdown" style="position: relative;">
+                            <button class="class-action-btn" type="button" onclick="event.preventDefault(); event.stopPropagation(); toggleClassMenu(@classItem.Id, '@classItem.UserRole');">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div class="class-card-dropdown" id="classMenu_@classItem.Id" style="display: none;">
+                                @if (classItem.UserRole == "Teacher")
+                                {
+                                    <a href="#" class="dropdown-item" onclick="event.preventDefault(); event.stopPropagation(); copyClassCode('@classItem.JoinCode');">
+                                        <i class="fas fa-copy me-2"></i>  Sao chép mã lớp học
+                                    </a>
+                                    <a href="#" class="dropdown-item text-danger" onclick="event.preventDefault(); event.stopPropagation(); deleteClass(@classItem.Id, '@Html.Raw(classItem.ClassName.Replace("'", "\\'"))');">
+                                        <i class="fas fa-trash me-2"></i>  Xóa lớp học
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="#" class="dropdown-item" onclick="event.preventDefault(); event.stopPropagation(); copyClassCode('@classItem.JoinCode');">
+                                        <i class="fas fa-copy me-2"></i>  Sao chép mã lớp học
+                                    </a>
+                                    <a href="#" class="dropdown-item text-danger" onclick="event.preventDefault(); event.stopPropagation(); leaveClass(@classItem.Id, '@Html.Raw(classItem.ClassName.Replace("'", "\\'"))');">
+                                        <i class="fas fa-sign-out-alt me-2"></i>  Rời lớp học
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            }
+        </div>
+    </div>
+}

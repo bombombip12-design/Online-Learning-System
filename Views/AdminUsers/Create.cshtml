@@ -1,0 +1,545 @@
+@model FinalASB.Models.User
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "User Management";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-person-plus me-2"></i>Tạo tài khoản mới</h2>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-11 col-xl-10">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-5">
+                <form asp-action="Create" method="post" enctype="multipart/form-data">
+                    @if (ViewData.ModelState.ErrorCount > 0)
+                    {
+                        <div asp-validation-summary="All" class="alert alert-danger mb-4"></div>
+                    }
+                    
+                    <!-- Avatar Section -->
+                    <div class="text-center mb-4">
+                        <div class="avatar-upload-wrapper d-inline-block position-relative">
+                            <div class="avatar-preview" id="avatarPreview">
+                                <i class="bi bi-person-fill"></i>
+                            </div>
+                            <label for="avatarInput" class="avatar-upload-btn" title="Tải ảnh đại diện">
+                                <i class="bi bi-camera-fill"></i>
+                            </label>
+                            <input type="file" id="avatarInput" name="avatarFile" accept="image/*" class="d-none" />
+                        </div>
+                        <p class="text-muted small mt-2 mb-0">Ảnh đại diện (tùy chọn)</p>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Personal Information Section -->
+                    <h5 class="mb-4 text-primary">
+                        <i class="bi bi-person-badge me-2"></i>Thông tin cá nhân
+                    </h5>
+                    
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label asp-for="FullName" class="form-label fw-semibold">
+                                <i class="bi bi-person me-2"></i>Họ và tên <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-person"></i>
+                                </span>
+                                <input asp-for="FullName" id="FullName" class="form-control form-control-lg" placeholder="Nhập họ và tên" />
+                                <span class="input-group-text" id="fullNameStatus"></span>
+                            </div>
+                            <div id="fullNameFeedback" class="mt-2"></div>
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="Email" class="form-label fw-semibold">
+                                <i class="bi bi-envelope me-2"></i>Email <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-envelope"></i>
+                                </span>
+                                <input asp-for="Email" type="email" id="Email" class="form-control form-control-lg" placeholder="Nhập email" />
+                                <span class="input-group-text" id="emailStatus"></span>
+                            </div>
+                            <div id="emailFeedback" class="mt-2"></div>
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <!-- Password Section -->
+                    <h5 class="mb-4 text-primary mt-5">
+                        <i class="bi bi-shield-lock me-2"></i>Thông tin đăng nhập
+                    </h5>
+
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-4">
+                            <label for="Password" class="form-label fw-semibold">
+                                <i class="bi bi-lock me-2"></i>Mật khẩu <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-lock"></i>
+                                </span>
+                                <input type="password" name="Password" id="Password" class="form-control form-control-lg" placeholder="Nhập mật khẩu" />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('Password', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-info-circle me-1"></i>Tối thiểu 6 ký tự
+                            </small>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="ConfirmPassword" class="form-label fw-semibold">
+                                <i class="bi bi-lock-fill me-2"></i>Xác nhận mật khẩu <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-lock-fill"></i>
+                                </span>
+                                <input type="password" name="ConfirmPassword" id="ConfirmPassword" class="form-control form-control-lg" placeholder="Nhập lại mật khẩu" />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('ConfirmPassword', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="AdminPassword" class="form-label fw-semibold">
+                                <i class="bi bi-key me-2"></i>Mật khẩu admin <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-key"></i>
+                                </span>
+                                <input type="password" name="AdminPassword" id="AdminPassword" class="form-control form-control-lg" placeholder="Nhập mật khẩu admin" />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('AdminPassword', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-shield-check me-1"></i>Xác nhận quyền admin
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Role Section -->
+                    <h5 class="mb-4 text-primary mt-5">
+                        <i class="bi bi-shield-check me-2"></i>Phân quyền
+                    </h5>
+
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <label asp-for="SystemRoleId" class="form-label fw-semibold">
+                                <i class="bi bi-shield-check me-2"></i>Vai trò <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-shield-check"></i>
+                                </span>
+                                <select asp-for="SystemRoleId" class="form-select form-select-lg" asp-items="ViewBag.Roles">
+                                    <option value="">-- Chọn vai trò --</option>
+                                </select>
+                            </div>
+                            <span asp-validation-for="SystemRoleId" class="text-danger small"></span>
+                            @{
+                                var rolesList = ViewBag.Roles as SelectList;
+                                if (rolesList != null)
+                                {
+                                    var hasRoles = false;
+                                    foreach (var item in rolesList)
+                                    {
+                                        hasRoles = true;
+                                        break;
+                                    }
+                                    if (!hasRoles)
+                                    {
+                                        <small class="text-muted">Chưa có vai trò nào trong hệ thống</small>
+                                    }
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-3 justify-content-end mt-4">
+                        <a href="/AdminUsers" class="btn btn-outline-secondary px-4">
+                            <i class="bi bi-x-circle me-2"></i>Hủy
+                        </a>
+                        <button type="submit" class="btn btn-primary px-5">
+                            <i class="bi bi-check-circle me-2"></i>Tạo tài khoản
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-upload-wrapper {
+        position: relative;
+    }
+
+    .avatar-preview {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 3rem;
+        border: 4px solid #fff;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .avatar-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .avatar-upload-btn {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #667eea;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+        font-size: 1rem;
+    }
+
+    .avatar-upload-btn:hover {
+        background: #5568d3;
+        transform: scale(1.1);
+    }
+
+    .input-group-text {
+        min-width: 50px;
+        justify-content: center;
+        background-color: #f8f9fa !important;
+        font-size: 1rem;
+    }
+
+    .input-group-lg .input-group-text {
+        min-width: 55px;
+        padding: 0.75rem 1rem;
+    }
+
+    .form-control-lg,
+    .form-select-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .form-label {
+        margin-bottom: 0.5rem;
+        color: #495057;
+        font-size: 0.95rem;
+    }
+
+    h5 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    .validation-feedback {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .validation-feedback.valid {
+        color: #198754;
+    }
+
+    .validation-feedback.invalid {
+        color: #dc3545;
+    }
+
+    .validation-feedback.checking {
+        color: #0d6efd;
+    }
+
+    .form-control.is-valid {
+        border-color: #198754;
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+
+    .form-control.is-checking {
+        border-color: #0d6efd;
+    }
+</style>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <script type="text/javascript">
+        (function() {
+            document.addEventListener('DOMContentLoaded', function() {
+                let emailCheckTimeout;
+                let fullNameCheckTimeout;
+
+                // Avatar preview
+                const avatarInput = document.getElementById('avatarInput');
+                if (avatarInput) {
+                    avatarInput.addEventListener('change', function(e) {
+                        const file = e.target.files ? e.target.files.item(0) : null;
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(event) {
+                                const preview = document.getElementById('avatarPreview');
+                                if (preview) {
+                                    preview.innerHTML = '<img src="' + event.target.result + '" alt="Avatar">';
+                                }
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+
+                // Toggle password visibility
+                window.togglePassword = function(inputId, button) {
+                    const input = document.getElementById(inputId);
+                    if (!input) return;
+                    
+                    const icon = button ? button.querySelector('i') : null;
+                    if (!icon) return;
+                    
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        icon.classList.remove('bi-eye');
+                        icon.classList.add('bi-eye-slash');
+                    } else {
+                        input.type = 'password';
+                        icon.classList.remove('bi-eye-slash');
+                        icon.classList.add('bi-eye');
+                    }
+                };
+
+                // Check email exists
+                const emailInput = document.getElementById('Email');
+                if (emailInput) {
+                    emailInput.addEventListener('input', function() {
+                        const email = this.value.trim();
+                        const emailStatus = document.getElementById('emailStatus');
+                        const emailFeedback = document.getElementById('emailFeedback');
+                        
+                        clearTimeout(emailCheckTimeout);
+                        
+                        if (email.length === 0) {
+                            if (emailStatus) emailStatus.innerHTML = '';
+                            if (emailFeedback) emailFeedback.innerHTML = '';
+                            this.classList.remove('is-valid', 'is-invalid', 'is-checking');
+                            return;
+                        }
+
+                        // Validate email format (simple validation)
+                        var atChar = String.fromCharCode(64);
+                        var atIndex = email.indexOf(atChar);
+                        var dotIndex = email.lastIndexOf('.');
+                        if (atIndex <= 0 || dotIndex <= atIndex || dotIndex === email.length - 1) {
+                            if (emailStatus) emailStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i>';
+                            if (emailFeedback) emailFeedback.innerHTML = '<div class="validation-feedback invalid"><i class="bi bi-exclamation-circle"></i>Email không hợp lệ</div>';
+                            this.classList.add('is-invalid');
+                            this.classList.remove('is-valid', 'is-checking');
+                            return;
+                        }
+
+                        // Show checking state
+                        if (emailStatus) emailStatus.innerHTML = '<i class="bi bi-hourglass-split text-primary"></i>';
+                        if (emailFeedback) emailFeedback.innerHTML = '<div class="validation-feedback checking"><i class="bi bi-arrow-repeat spin"></i>Đang kiểm tra email...</div>';
+                        this.classList.add('is-checking');
+                        this.classList.remove('is-valid', 'is-invalid');
+
+                        emailCheckTimeout = setTimeout(function() {
+                            fetch('/AdminUsers/CheckEmail?email=' + encodeURIComponent(email))
+                                .then(function(response) {
+                                    if (!response.ok) {
+                                        throw new Error('Network response was not ok');
+                                    }
+                                    return response.json();
+                                })
+                                .then(function(data) {
+                                    if (data.exists) {
+                                        if (emailStatus) emailStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i>';
+                                        if (emailFeedback) emailFeedback.innerHTML = '<div class="validation-feedback invalid"><i class="bi bi-exclamation-circle"></i>Email này đã được sử dụng</div>';
+                                        emailInput.classList.add('is-invalid');
+                                        emailInput.classList.remove('is-valid', 'is-checking');
+                                    } else {
+                                        if (emailStatus) emailStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+                                        if (emailFeedback) emailFeedback.innerHTML = '<div class="validation-feedback valid"><i class="bi bi-check-circle"></i>Email có thể sử dụng</div>';
+                                        emailInput.classList.add('is-valid');
+                                        emailInput.classList.remove('is-invalid', 'is-checking');
+                                    }
+                                })
+                                .catch(function(error) {
+                                    console.error('Error checking email:', error);
+                                    if (emailStatus) emailStatus.innerHTML = '';
+                                    if (emailFeedback) emailFeedback.innerHTML = '';
+                                    emailInput.classList.remove('is-valid', 'is-invalid', 'is-checking');
+                                });
+                        }, 500);
+                    });
+                }
+
+                // Check fullname (username) exists
+                const fullNameInput = document.getElementById('FullName');
+                if (fullNameInput) {
+                    fullNameInput.addEventListener('input', function() {
+                        const fullName = this.value.trim();
+                        const fullNameStatus = document.getElementById('fullNameStatus');
+                        const fullNameFeedback = document.getElementById('fullNameFeedback');
+                        
+                        clearTimeout(fullNameCheckTimeout);
+                        
+                        if (fullName.length === 0) {
+                            if (fullNameStatus) fullNameStatus.innerHTML = '';
+                            if (fullNameFeedback) fullNameFeedback.innerHTML = '';
+                            this.classList.remove('is-valid', 'is-invalid', 'is-checking');
+                            return;
+                        }
+
+                        if (fullName.length < 2) {
+                            if (fullNameStatus) fullNameStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i>';
+                            if (fullNameFeedback) fullNameFeedback.innerHTML = '<div class="validation-feedback invalid"><i class="bi bi-exclamation-circle"></i>Tên phải có ít nhất 2 ký tự</div>';
+                            this.classList.add('is-invalid');
+                            this.classList.remove('is-valid', 'is-checking');
+                            return;
+                        }
+
+                        // Show checking state
+                        if (fullNameStatus) fullNameStatus.innerHTML = '<i class="bi bi-hourglass-split text-primary"></i>';
+                        if (fullNameFeedback) fullNameFeedback.innerHTML = '<div class="validation-feedback checking"><i class="bi bi-arrow-repeat spin"></i>Đang kiểm tra tên người dùng...</div>';
+                        this.classList.add('is-checking');
+                        this.classList.remove('is-valid', 'is-invalid');
+
+                        fullNameCheckTimeout = setTimeout(function() {
+                            fetch('/AdminUsers/CheckFullName?fullName=' + encodeURIComponent(fullName))
+                                .then(function(response) {
+                                    if (!response.ok) {
+                                        throw new Error('Network response was not ok');
+                                    }
+                                    return response.json();
+                                })
+                                .then(function(data) {
+                                    if (data.exists) {
+                                        if (fullNameStatus) fullNameStatus.innerHTML = '<i class="bi bi-x-circle text-danger"></i>';
+                                        if (fullNameFeedback) fullNameFeedback.innerHTML = '<div class="validation-feedback invalid"><i class="bi bi-exclamation-circle"></i>Tên người dùng này đã được sử dụng</div>';
+                                        fullNameInput.classList.add('is-invalid');
+                                        fullNameInput.classList.remove('is-valid', 'is-checking');
+                                    } else {
+                                        if (fullNameStatus) fullNameStatus.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+                                        if (fullNameFeedback) fullNameFeedback.innerHTML = '<div class="validation-feedback valid"><i class="bi bi-check-circle"></i>Tên người dùng có thể sử dụng</div>';
+                                        fullNameInput.classList.add('is-valid');
+                                        fullNameInput.classList.remove('is-invalid', 'is-checking');
+                                    }
+                                })
+                                .catch(function(error) {
+                                    console.error('Error checking fullname:', error);
+                                    if (fullNameStatus) fullNameStatus.innerHTML = '';
+                                    if (fullNameFeedback) fullNameFeedback.innerHTML = '';
+                                    fullNameInput.classList.remove('is-valid', 'is-invalid', 'is-checking');
+                                });
+                        }, 500);
+                    });
+                }
+
+                // Validate password match and admin password
+                const form = document.querySelector('form');
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        const passwordInput = document.getElementById('Password');
+                        const confirmPasswordInput = document.getElementById('ConfirmPassword');
+                        const adminPasswordInput = document.getElementById('AdminPassword');
+                        const emailInput = document.getElementById('Email');
+                        const fullNameInput = document.getElementById('FullName');
+                        
+                        if (!passwordInput || !confirmPasswordInput || !adminPasswordInput || !emailInput || !fullNameInput) {
+                            return;
+                        }
+                        
+                        const password = passwordInput.value;
+                        const confirmPassword = confirmPasswordInput.value;
+                        const adminPassword = adminPasswordInput.value;
+                        const email = emailInput.value.trim();
+                        const fullName = fullNameInput.value.trim();
+                        
+                        // Check if email or fullname is invalid
+                        if (emailInput.classList.contains('is-invalid') || 
+                            fullNameInput.classList.contains('is-invalid')) {
+                            e.preventDefault();
+                            alert('Vui lòng sửa các lỗi trước khi tiếp tục!');
+                            return false;
+                        }
+                        
+                        // Validate email is not empty
+                        if (!email || email.length === 0) {
+                            e.preventDefault();
+                            alert('Vui lòng nhập email!');
+                            return false;
+                        }
+                        
+                        // Validate fullname is not empty
+                        if (!fullName || fullName.length === 0) {
+                            e.preventDefault();
+                            alert('Vui lòng nhập họ và tên!');
+                            return false;
+                        }
+                        
+                        if (password !== confirmPassword) {
+                            e.preventDefault();
+                            alert('Mật khẩu xác nhận không khớp!');
+                            return false;
+                        }
+                        
+                        if (password.length < 6) {
+                            e.preventDefault();
+                            alert('Mật khẩu phải có ít nhất 6 ký tự!');
+                            return false;
+                        }
+
+                        if (!adminPassword || adminPassword.trim() === '') {
+                            e.preventDefault();
+                            alert('Vui lòng nhập mật khẩu admin để xác nhận!');
+                            return false;
+                        }
+                    });
+                }
+
+                // Add spin animation
+                const style = document.createElement('style');
+                var keyframesText = String.fromCharCode(64) + 'keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }';
+                style.textContent = keyframesText;
+                document.head.appendChild(style);
+            });
+        })();
+    </script>
+}
+

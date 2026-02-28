@@ -1,0 +1,86 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "Dashboard";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-speedometer2 me-2"></i>Tổng quan</h2>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #667eea !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-people-fill text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng người dùng</h6>
+                <h2 class="mb-0 fw-bold text-dark">@Model.TotalUsers</h2>
+                <small class="text-success"><i class="bi bi-arrow-up"></i> Tổng số</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-book-fill text-success" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng lớp học</h6>
+                <h2 class="mb-0 fw-bold text-dark">@Model.TotalClasses</h2>
+                <small class="text-success"><i class="bi bi-arrow-up"></i> Tổng số</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #0dcaf0 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-megaphone-fill text-info" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng thông báo</h6>
+                <h2 class="mb-0 fw-bold text-dark">@Model.TotalAnnouncements</h2>
+                <small class="text-success"><i class="bi bi-arrow-up"></i> Tổng số</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-file-earmark-text-fill text-warning" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng bài tập</h6>
+                <h2 class="mb-0 fw-bold text-dark">@Model.TotalAssignments</h2>
+                <small class="text-success"><i class="bi bi-arrow-up"></i> Tổng số</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #ef4444 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-danger bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-send-fill text-danger" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng bài nộp</h6>
+                <h2 class="mb-0 fw-bold text-dark">@Model.TotalSubmissions</h2>
+                <small class="text-success"><i class="bi bi-arrow-up"></i> Tổng số</small>
+            </div>
+        </div>
+    </div>
+    
+</div>

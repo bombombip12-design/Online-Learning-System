@@ -1,0 +1,37 @@
+@model FinalASB.ViewComponents.SidebarClassesViewModel
+
+@if (Model.ShowType == "teaching")
+{
+    @if (Model.TeachingClasses.Any())
+    {
+        @foreach (var cls in Model.TeachingClasses)
+        {
+            <a href="@Url.Action("Details", "Classes", new { id = cls.Id })" class="sidebar-dropdown-item">
+                <i class="fas fa-book me-2"></i>
+                <span>@cls.ClassName</span>
+            </a>
+        }
+    }
+    else
+    {
+        <div class="sidebar-dropdown-empty">Chưa có lớp nào</div>
+    }
+}
+else if (Model.ShowType == "student")
+{
+    @if (Model.StudentClasses.Any())
+    {
+        @foreach (var cls in Model.StudentClasses)
+        {
+            <a href="@Url.Action("Details", "Classes", new { id = cls.Id })" class="sidebar-dropdown-item">
+                <i class="fas fa-users me-2"></i>
+                <span>@cls.ClassName</span>
+            </a>
+        }
+    }
+    else
+    {
+        <div class="sidebar-dropdown-empty">Chưa có lớp nào</div>
+    }
+}
+

@@ -1,0 +1,111 @@
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "Reports";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-calendar-range me-2"></i>Thống kê theo ngày/tháng</h2>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Chọn khoảng thời gian:</label>
+                <select name="period" class="form-select" onchange="this.form.submit()">
+                    <option value="day" selected="@(ViewBag.Period == "day")">Hôm nay</option>
+                    <option value="week" selected="@(ViewBag.Period == "week")">7 ngày qua</option>
+                    <option value="month" selected="@(ViewBag.Period == "month")">Tháng này</option>
+                    <option value="year" selected="@(ViewBag.Period == "year")">Năm nay</option>
+                </select>
+            </div>
+            <div class="col-md-9 d-flex align-items-end">
+                <p class="mb-0 text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Đang hiển thị: <strong>@ViewBag.PeriodLabel</strong> (từ @ViewBag.StartDate.ToString("dd/MM/yyyy"))
+                </p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #667eea !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-person-plus-fill text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Người dùng mới</h6>
+                <h2 class="mb-0 fw-bold text-dark">@ViewBag.NewUsers</h2>
+                <small class="text-muted">tài khoản</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-book-fill text-success" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Lớp học mới</h6>
+                <h2 class="mb-0 fw-bold text-dark">@ViewBag.NewClasses</h2>
+                <small class="text-muted">lớp học</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #0dcaf0 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-megaphone-fill text-info" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Thông báo mới</h6>
+                <h2 class="mb-0 fw-bold text-dark">@ViewBag.NewAnnouncements</h2>
+                <small class="text-muted">thông báo</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-file-earmark-text-fill text-warning" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Bài tập mới</h6>
+                <h2 class="mb-0 fw-bold text-dark">@ViewBag.NewAssignments</h2>
+                <small class="text-muted">bài tập</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #ef4444 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="bg-danger bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-send-fill text-danger" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+                <h6 class="text-muted mb-2 text-uppercase small fw-bold">Bài nộp mới</h6>
+                <h2 class="mb-0 fw-bold text-dark">@ViewBag.NewSubmissions</h2>
+                <small class="text-muted">bài nộp</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+

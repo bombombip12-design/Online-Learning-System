@@ -1,0 +1,2945 @@
+@model FinalASB.Models.Assignment
+@using FinalASB.Models
+@{
+    ViewData["Title"] = Model.Title;
+    Layout = "_DashboardLayout";
+    var userRole = ViewBag.UserRole as string ?? "Student";
+    var userId = ViewBag.UserId as int? ?? 0;
+    var userSubmission = ViewBag.UserSubmission as FinalASB.Models.Submission;
+    var allSubmissions = ViewBag.AllSubmissions as List<Submission> ?? new List<Submission>();
+    var classStudents = ViewBag.ClassStudents as List<Enrollment> ?? new List<Enrollment>();
+    var isTeacher = userRole == "Teacher";
+    var studentIds = classStudents.Select(e => e.UserId).ToList(); // Danh sách ID học sinh
+    var assignmentComments = Model.Comments?.Where(c => !c.IsPrivate).OrderByDescending(c => c.CreatedAt).ToList() ?? new List<FinalASB.Models.Comment>();
+    var assignmentDescription = Model.Description?.TrimStart();
+    
+    // Private comments cho view sinh viên:
+    // - IsPrivate = true
+    // - Thuộc bài tập hiện tại (AssignmentId)
+    // - Nhắm tới chính sinh viên này (TargetUserId = userId)
+    // - Người gửi là sinh viên hoặc giáo viên
+    var privateComments = Model.Comments?
+        .Where(c => c.IsPrivate
+                    && c.AssignmentId == Model.Id
+                    && c.TargetUserId == userId
+                    && (c.UserId == userId || c.UserId == Model.CreatedBy))
+        .OrderByDescending(c => c.CreatedAt)
+        .ToList() ?? new List<Comment>();
+}
+
+<div class="assignment-details-container">
+    
+    <div class="assignment-details-content @(isTeacher ? "teacher-view" : "student-view")">
+        @if (isTeacher)
+        {
+            <!-- Teacher View: Single Column -->
+            <div class="assignment-main-content">
+                <!-- Tab Navigation -->
+                <div class="assignment-tabs" style="border-bottom: 1px solid #e0e0e0; margin-bottom: 1rem;">
+                    <button type="button" class="assignment-tab active" data-tab="instructions">
+                        Bài tập
+                    </button>
+                    <button type="button" class="assignment-tab" data-tab="submissions">
+                        Xem &amp; Chấm điểm
+                    </button>
+                </div>
+
+                <!-- Tab Content: Instructions -->
+                <div id="instructionsTab" class="tab-content active">
+                <div class="assignment-card">
+                    <div class="assignment-header">
+                        <div class="assignment-icon">
+                            <i class="fas fa-clipboard-list"></i>
+                        </div>
+                        <div class="assignment-title-section">
+                            <h1 class="assignment-title">@Model.Title</h1>
+                            <div class="assignment-meta">
+                                <span>@Model.Creator.FullName</span>
+                                <span>•</span>
+                                <span>@Model.CreatedAt.ToString("dd 'thg' MM")</span>
+                                @if (Model.CreatedAt != Model.CreatedAt)
+                                {
+                                    <span>(Đã chỉnh sửa @Model.CreatedAt.ToString("dd 'thg' MM"))</span>
+                                }
+                            </div>
+                        </div>
+                        @if (isTeacher)
+                        {
+                            <div class="assignment-actions post-menu">
+                                <button type="button"
+                                        class="assignment-menu-btn post-menu-btn"
+                                        data-assignment-menu-toggle
+                                        aria-label="Mở menu thao tác">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                                <div class="post-menu-dropdown assignment-menu-dropdown">
+                                    <button type="button"
+                                            class="post-menu-item"
+                                            data-assignment-action="edit"
+                                            data-assignment-id="@Model.Id">
+                                        Chỉnh sửa
+                                    </button>
+                                    <button type="button"
+                                            class="post-menu-item danger"
+                                            data-assignment-action="delete"
+                                            data-confirmation="Bạn có chắc chắn muốn xoá bài tập này?">
+                                        Xoá
+                                </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="assignment-info">
+                        @if (Model.DueDate.HasValue)
+                        {
+                            <div class="assignment-points">
+                                <span>Đến hạn @Model.DueDate.Value.ToString("HH:mm dd 'thg' MM")</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(assignmentDescription))
+                    {
+                        <div class="assignment-description">@Html.Raw(assignmentDescription.Replace("\n", "<br>"))</div>
+                    }
+
+                    @if (Model.Attachments != null && Model.Attachments.Any())
+                    {
+                        <div class="post-attachments">
+                            @foreach (var attachment in Model.Attachments)
+                            {
+                                @if (attachment.Type == "YouTube")
+                                {
+                                    <div class="post-attachment-card youtube-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@(!string.IsNullOrEmpty(attachment.Title) ? attachment.Title : "YouTube")</div>
+                                            <div class="attachment-subtitle">@attachment.Url</div>
+                                        </div>
+                                        <div class="attachment-thumbnail">
+                                            @if (!string.IsNullOrEmpty(attachment.VideoId))
+                                            {
+                                                <img src="https://img.youtube.com/vi/@attachment.VideoId/mqdefault.jpg" alt="YouTube thumbnail" />
+                                            }
+                                            else
+                                            {
+                                                <i class="fab fa-youtube"></i>
+                                            }
+                                        </div>
+                                        <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                    </div>
+                                }
+                                else if (attachment.Type == "Link")
+                                {
+                                    <div class="post-attachment-card link-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@attachment.Title</div>
+                                            <div class="attachment-subtitle">@attachment.Url</div>
+                                        </div>
+                                        <div class="attachment-icon">
+                                            <i class="fas fa-link"></i>
+                                        </div>
+                                        <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                    </div>
+                                }
+                                else if (attachment.Type == "File")
+                                {
+                                    <div class="post-attachment-card file-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@attachment.FileName</div>
+                                            <div class="attachment-subtitle">Tệp đính kèm</div>
+                                        </div>
+                                        <div class="attachment-icon">
+                                            <i class="fas fa-file"></i>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(attachment.Url))
+                                        {
+                                            <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+
+                    <div class="assignment-comments-section">
+                        <div class="comments-header">
+                            <i class="fas fa-comments"></i>
+                            <span>Nhận xét của lớp học</span>
+                        </div>
+                        <div class="comments-list" id="assignmentCommentsList">
+                            @if (assignmentComments.Any())
+                            {
+                                @foreach (var comment in assignmentComments)
+                                {
+                                    var canDeletePublic = comment.UserId == userId || (isTeacher && studentIds.Contains(comment.UserId));
+                                    var canEditPublic = isTeacher && comment.UserId == userId; // Chỉ giáo viên có thể sửa comment của mình
+                                    <div class="comment-item" data-comment-id="@comment.Id">
+                                        <div class="comment-avatar">
+                                            @if (!string.IsNullOrEmpty(comment.User.AvatarUrl))
+                                            {
+                                                <img src="@comment.User.AvatarUrl" alt="@comment.User.FullName" class="comment-avatar-img" />
+                                            }
+                                            else
+                                            {
+                                                @comment.User.FullName.First()
+                                            }
+                                        </div>
+                                        <div class="comment-content">
+                                            <div class="comment-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                                <div class="comment-author">@comment.User.FullName</div>
+                                                @if (canDeletePublic || canEditPublic)
+                                                {
+                                                    <div class="comment-menu" style="position: relative;">
+                                                        <button type="button" class="comment-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; position: relative; z-index: 10;" onclick="toggleCommentMenu(this, event)">
+                                                            <i class="fas fa-ellipsis-v"></i>
+                                                        </button>
+                                                        <div class="comment-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                            @if (canEditPublic)
+                                                            {
+                                                                <button type="button" class="comment-edit-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #1976d2; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="openEditCommentModal(@comment.Id, this, event)" data-comment-content="@Html.Raw(comment.Content.Replace("\"", "&quot;").Replace("\r", "").Replace("\n", "&#10;"))">
+                                                                    <i class="fas fa-edit" style="margin-right: 8px;"></i>Chỉnh sửa
+                                                                </button>
+                                                            }
+                                                            @if (canDeletePublic)
+                                                            {
+                                                                <button type="button" class="comment-delete-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="deletePrivateComment(@comment.Id, this, event)">
+                                                                    <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="comment-text">@comment.Content</div>
+                                            <div class="comment-time">@comment.CreatedAt.ToString("HH:mm dd 'thg' MM")</div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="comments-empty">Chưa có nhận xét nào.</div>
+                            }
+                        </div>
+                        <form class="comment-form" method="post" action="@Url.Action("Create", "Comments")">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="classId" value="@Model.ClassId" />
+                            <input type="hidden" name="entityType" value="assignment" />
+                            <input type="hidden" name="entityId" value="@Model.Id" />
+                            <div class="comment-input-wrapper">
+                                <div class="comment-avatar-small" style="overflow: hidden;">
+                                    @if (!string.IsNullOrEmpty((string?)ViewBag.CurrentUserAvatarUrl))
+                                    {
+                                        <img src="@ViewBag.CurrentUserAvatarUrl" alt="@User.Identity?.Name" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                    }
+                                    else
+                                    {
+                                        @User.Identity?.Name?.First()
+                                    }
+                                </div>
+                                <input type="text" name="content" class="comment-input" placeholder="Thêm nhận xét trong lớp học..." />
+                                <button type="submit" class="comment-submit-btn">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Submissions -->
+                <div id="submissionsTab" class="tab-content" style="display: none;">
+                    @if (classStudents.Any())
+                    {
+                        var now = DateTime.Now;
+                        var dueDate = Model.DueDate;
+
+                        <div class="teacher-submissions-layout">
+                            <!-- BÊN TRÁI: DANH SÁCH HỌC SINH -->
+                            <div class="teacher-submissions-list">
+                                <table class="teacher-submissions-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Học sinh</th>
+                                            <th>Trạng thái</th>
+                                            <th>Điểm</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var enrollment in classStudents)
+                                        {
+                                            var student = enrollment.User;
+                                            var submission = allSubmissions.FirstOrDefault(s => s.StudentId == student.Id);
+                                            bool hasSubmission = submission != null;
+
+                                            string statusText;
+                                            string statusClass;
+
+                                            if (!hasSubmission)
+                                            {
+                                                if (dueDate.HasValue && now > dueDate.Value)
+                                                {
+                                                    statusText = "Thiếu";
+                                                    statusClass = "status-missing";
+                                                }
+                                                else
+                                                {
+                                                    statusText = "Chưa nộp";
+                                                    statusClass = "status-not-submitted";
+                                                }
+                                            }
+                                            else
+                                            {
+                                                statusText = "Đã nộp";
+                                                statusClass = "status-submitted";
+                                            }
+
+                                            string scoreText;
+                                            if (!hasSubmission)
+                                            {
+                                                scoreText = "-";
+                                            }
+                                            else if (submission!.Score.HasValue)
+                                            {
+                                                scoreText = submission.Score!.Value.ToString();
+                                            }
+                                            else
+                                            {
+                                                scoreText = "Chưa chấm";
+                                            }
+
+                                            <tr data-student-row data-student-id="@student.Id" class="@(enrollment == classStudents.First() ? "active" : "")">
+                                                <td class="student-name-cell">@student.FullName</td>
+                                                <td class="student-status-cell">
+                                                    <span class="submission-status @statusClass">@statusText</span>
+                                                </td>
+                                                <td class="student-score-cell">@scoreText</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                        </div>
+                        
+                            <!-- BÊN PHẢI: CHI TIẾT BÀI NỘP + CHẤM ĐIỂM -->
+                            <div class="teacher-submissions-detail">
+                                @foreach (var enrollment in classStudents)
+                                {
+                                    var student = enrollment.User;
+                                    var submission = allSubmissions.FirstOrDefault(s => s.StudentId == student.Id);
+                                    var hasSubmission = submission != null;
+
+                                    // Tất cả nhận xét riêng tư giữa giáo viên và học sinh này cho bài tập hiện tại
+                                    var allPrivateCommentsForStudent = Model.Comments?
+                                        .Where(c => c.IsPrivate
+                                                    && c.AssignmentId == Model.Id
+                                                    && c.TargetUserId == student.Id
+                                                    && (c.UserId == student.Id || c.UserId == Model.CreatedBy))
+                                        .OrderByDescending(c => c.CreatedAt)
+                                        .ToList() ?? new List<Comment>();
+
+                                    <div class="submission-detail-card"
+                                         data-student-detail="@student.Id"
+                                         style="display:@(enrollment == classStudents.First() ? "block" : "none")">
+                                        @if (!hasSubmission)
+                                        {
+                                            <div class="assignment-card" style="padding: 2rem; text-align: center; color: #999; margin-bottom: 1rem;">
+                                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                                <p>@student.FullName chưa nộp bài.</p>
+                                            </div>
+                                            
+                                            @* Private comments - luôn hiển thị dù học sinh chưa nộp bài *@
+                                            <div class="private-comments-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+                                                <div class="comments-header" style="display: flex; align-items: center; margin-bottom: 1rem;">
+                                                    <i class="fas fa-user-secret me-2" style="color: #666;"></i>
+                                                    <span style="font-weight: 600; color: #555;">Nhận xét riêng tư với @student.FullName</span>
+                                                </div>
+                                                <div class="comments-list">
+                                                    @if (allPrivateCommentsForStudent.Any())
+                                                    {
+                                                        @foreach (var comment in allPrivateCommentsForStudent)
+                                                        {
+                                                            <div class="comment-item" style="display: flex; margin-bottom: 1rem; padding: 0.75rem; background: #f9f9f9; border-radius: 6px; position: relative;" data-comment-id="@comment.Id">
+                                                                <div class="comment-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: #1976d2; color: white; display: flex; align-items: center; justify-content: center; margin-right: 0.75rem; font-weight: bold; flex-shrink: 0; overflow: hidden;">
+                                                                    @if (!string.IsNullOrEmpty(comment.User.AvatarUrl))
+                                                                    {
+                                                                        <img src="@comment.User.AvatarUrl" alt="@comment.User.FullName" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        @comment.User.FullName.First()
+                                                                    }
+                                                                </div>
+                                                                <div class="comment-content" style="flex: 1;">
+                                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                                                        <div class="comment-author" style="font-weight: 600; color: #333;">@comment.User.FullName</div>
+                                                                        @{
+                                                                            var canDeletePrivate = comment.UserId == userId || (isTeacher && student.Id == comment.UserId);
+                                                                            var canEditPrivate = isTeacher && comment.UserId == userId; // Chỉ giáo viên có thể sửa comment của mình
+                                                                        }
+                                                                        @if (canDeletePrivate || canEditPrivate)
+                                                                        {
+                                                                            <div class="comment-menu" style="position: relative;">
+                                                                                <button type="button" class="comment-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; position: relative; z-index: 10;" onclick="toggleCommentMenu(this, event)">
+                                                                                    <i class="fas fa-ellipsis-v"></i>
+                                                                                </button>
+                                                                                <div class="comment-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                                                    @if (canEditPrivate)
+                                                                                    {
+                                                                                        <button type="button" class="comment-edit-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #1976d2; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="openEditCommentModal(@comment.Id, this, event)" data-comment-content="@Html.Raw(comment.Content.Replace("\"", "&quot;").Replace("\r", "").Replace("\n", "&#10;"))">
+                                                                                            <i class="fas fa-edit" style="margin-right: 8px;"></i>Chỉnh sửa
+                                                                                        </button>
+                                                                                    }
+                                                                                    @if (canDeletePrivate)
+                                                                                    {
+                                                                                        <button type="button" class="comment-delete-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="deletePrivateComment(@comment.Id, this, event)">
+                                                                                            <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                                                        </button>
+                                                                                    }
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                    <div class="comment-text" style="color: #555; margin-bottom: 0.25rem;">@comment.Content</div>
+                                                                    <div class="comment-time" style="color: #999; font-size: 0.85rem;">@comment.CreatedAt.ToString("HH:mm dd/MM/yyyy")</div>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="comments-empty" style="color: #999; font-style: italic; margin-bottom: 1rem;">Chưa có nhận xét riêng tư nào.</div>
+                                                    }
+                                                </div>
+                                                <form class="comment-form" method="post" action="@Url.Action("Create", "Comments")" style="margin-top: 1rem;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="classId" value="@Model.ClassId" />
+                                                    <input type="hidden" name="entityType" value="assignment" />
+                                                    <input type="hidden" name="entityId" value="@Model.Id" />
+                                                    @* Không gửi submissionId khi học sinh chưa nộp bài *@
+                                                    <input type="hidden" name="isPrivate" value="true" />
+                                                    <input type="hidden" name="targetUserId" value="@student.Id" />  @* ⭐ thêm dòng này *@
+                                                    <div class="comment-input-wrapper" style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <div class="comment-avatar-small" style="width: 32px; height: 32px; border-radius: 50%; background: #1976d2; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; flex-shrink: 0; overflow: hidden;">
+                                                    @if (!string.IsNullOrEmpty((string?)ViewBag.CurrentUserAvatarUrl))
+                                                    {
+                                                        <img src="@ViewBag.CurrentUserAvatarUrl" alt="@User.Identity?.Name" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                                    }
+                                                    else
+                                                    {
+                                                        @User.Identity?.Name?.First()
+                                                    }
+                                                </div>
+                                                        <input type="text" name="content" class="comment-input" placeholder="Thêm nhận xét riêng tư cho @student.FullName..." style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem;" />
+                                                        <button type="submit" class="comment-submit-btn" style="background: #1976d2; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="submission-card" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 1.5rem; background: #fff;">
+                                                <div class="submission-student-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #f0f0f0;">
+                                        <div>
+                                                        <h3 style="margin: 0; font-size: 1.2rem; color: #333;">@student.FullName</h3>
+                                            <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                                                <i class="fas fa-clock me-1"></i>Nộp: @submission.SubmittedAt.ToString("dd/MM/yyyy HH:mm")
+                                            </div>
+                                        </div>
+                                            </div>
+
+                                                <!-- Form chấm điểm -->
+                                                <form method="post" action="@Url.Action("Grade", "Submissions")" class="submission-grade-form" style="margin-bottom: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 6px;">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="submissionId" value="@submission.Id" />
+                                                    <div style="display:flex; gap:1rem; align-items:center; margin-bottom:0.75rem;">
+                                                        <label style="font-size:0.95rem; font-weight:600; min-width:60px;">Điểm:</label>
+                                                        <input type="number"
+                                                               name="score"
+                                                               value="@(submission.Score ?? 0)"
+                                                               min="0"
+                                                               max="100"
+                                                               class="grade-input"
+                                                               style="width:80px; padding:0.5rem; border-radius:4px; border:1px solid #ccc; font-size:0.95rem;" />
+                                                        <button type="submit" class="btn-submit" style="padding:0.5rem 1.5rem; font-size:0.9rem; background:#1a73e8; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
+                                                            Lưu
+                                                        </button>
+                                            </div>
+                                                    <div>
+                                                        <label style="font-size:0.95rem; font-weight:600; display:block; margin-bottom:0.5rem;">Nhận xét của giáo viên:</label>
+                                                        <textarea name="teacherComment"
+                                                                  rows="3"
+                                                                  placeholder="Nhập nhận xét cho học sinh..."
+                                                                  style="width:100%; padding:0.75rem; border-radius:4px; border:1px solid #ddd; font-size:0.9rem; resize:vertical;">@submission.TeacherComment</textarea>
+                                    </div>
+                                                </form>
+
+                                                @* Files *@
+                                                @if (submission.Attachments != null && submission.Attachments.Any())
+                                    {
+                                        <div class="submission-files-section" style="margin-bottom: 1rem;">
+                                            <h4 style="margin-bottom: 0.75rem; color: #555; font-size: 1rem;">
+                                                            <i class="fas fa-file me-1"></i>Tệp đã nộp:
+                                            </h4>
+                                            <div class="submitted-files-list">
+                                                            @foreach (var attachment in submission.Attachments)
+                                                            {
+                                                                <a href="@attachment.Url"
+                                                                   target="_blank"
+                                                                   class="submitted-file-item"
+                                                                   style="display: flex; align-items: center; padding: 0.75rem; background: #f5f5f5; border-radius: 6px; margin-bottom: 0.5rem; text-decoration: none; color: #333;">
+                                                                    <i class="@(attachment.Type == "Link" ? "fas fa-link" : "fas fa-file-alt") me-2" style="color: #666;"></i>
+                                                                    <span>@(string.IsNullOrWhiteSpace(attachment.Title) ? (attachment.FileName ?? "Tệp đính kèm") : attachment.Title)</span>
+                                                            </a>
+                                                        }
+                                            </div>
+                                        </div>
+                                    }
+
+                                                @* Private comments - luôn hiển thị *@
+                                        <div class="private-comments-section" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e0e0e0;">
+                                            <div class="comments-header" style="display: flex; align-items: center; margin-bottom: 1rem;">
+                                                <i class="fas fa-user-secret me-2" style="color: #666;"></i>
+                                                <span style="font-weight: 600; color: #555;">Nhận xét riêng tư với @student.FullName</span>
+                                            </div>
+                                            <div class="comments-list">
+                                                @if (allPrivateCommentsForStudent.Any())
+                                                {
+                                                    @foreach (var comment in allPrivateCommentsForStudent)
+                                                    {
+                                                        <div class="comment-item" style="display: flex; margin-bottom: 1rem; padding: 0.75rem; background: #f9f9f9; border-radius: 6px; position: relative;" data-comment-id="@comment.Id">
+                                                            <div class="comment-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: #1976d2; color: white; display: flex; align-items: center; justify-content: center; margin-right: 0.75rem; font-weight: bold; flex-shrink: 0;">
+                                                                @comment.User.FullName.First()
+                                                            </div>
+                                                            <div class="comment-content" style="flex: 1;">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                                                    <div class="comment-author" style="font-weight: 600; color: #333;">@comment.User.FullName</div>
+                                                                    @{
+                                                                        var canDeletePrivate2 = comment.UserId == userId || (isTeacher && student.Id == comment.UserId);
+                                                                        var canEditPrivate2 = isTeacher && comment.UserId == userId; // Chỉ giáo viên có thể sửa comment của mình
+                                                                    }
+                                                                    @if (canDeletePrivate2 || canEditPrivate2)
+                                                                    {
+                                                                        <div class="comment-menu" style="position: relative;">
+                                                                            <button type="button" class="comment-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; position: relative; z-index: 10;" onclick="toggleCommentMenu(this, event)">
+                                                                                <i class="fas fa-ellipsis-v"></i>
+                                                                            </button>
+                                                                            <div class="comment-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                                                @if (canEditPrivate2)
+                                                                                {
+                                                                                    <button type="button" class="comment-edit-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #1976d2; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="openEditCommentModal(@comment.Id, this, event)" data-comment-content="@Html.Raw(comment.Content.Replace("\"", "&quot;").Replace("\r", "").Replace("\n", "&#10;"))">
+                                                                                        <i class="fas fa-edit" style="margin-right: 8px;"></i>Chỉnh sửa
+                                                                                    </button>
+                                                                                }
+                                                                                @if (canDeletePrivate2)
+                                                                                {
+                                                                                    <button type="button" class="comment-delete-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="deletePrivateComment(@comment.Id, this, event)">
+                                                                                        <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                                                    </button>
+                                                                                }
+                                                                            </div>
+                                                                        </div>
+                                                                    }
+                                                                </div>
+                                                                <div class="comment-text" style="color: #555; margin-bottom: 0.25rem;">@comment.Content</div>
+                                                                <div class="comment-time" style="color: #999; font-size: 0.85rem;">@comment.CreatedAt.ToString("HH:mm dd/MM/yyyy")</div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <div class="comments-empty" style="color: #999; font-style: italic; margin-bottom: 1rem;">Chưa có nhận xét riêng tư nào.</div>
+                                                }
+                                            </div>
+                                            <form class="comment-form" method="post" action="@Url.Action("Create", "Comments")" style="margin-top: 1rem;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="classId" value="@Model.ClassId" />
+                                                <input type="hidden" name="entityType" value="assignment" />
+                                                <input type="hidden" name="entityId" value="@Model.Id" />
+                                                @if (hasSubmission)
+                                                {
+                                                    <input type="hidden" name="submissionId" value="@submission.Id" />
+                                                }
+                                                <input type="hidden" name="isPrivate" value="true" />
+                                                <input type="hidden" name="targetUserId" value="@student.Id" />
+                                                <div class="comment-input-wrapper" style="display: flex; align-items: center; gap: 0.5rem;">
+                                                    <div class="comment-avatar-small" style="width: 32px; height: 32px; border-radius: 50%; background: #1976d2; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; flex-shrink: 0; overflow: hidden;">
+                                                        @if (!string.IsNullOrEmpty((string?)ViewBag.CurrentUserAvatarUrl))
+                                                        {
+                                                            <img src="@ViewBag.CurrentUserAvatarUrl" alt="@User.Identity?.Name" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                                        }
+                                                        else
+                                                        {
+                                                            @User.Identity?.Name?.First()
+                                                        }
+                                                    </div>
+                                                    <input type="text" name="content" class="comment-input" placeholder="Thêm nhận xét riêng tư cho @student.FullName..." style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem;" />
+                                                    <button type="submit" class="comment-submit-btn" style="background: #1976d2; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                                        <i class="fas fa-paper-plane"></i>
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="assignment-card" style="padding: 2rem; text-align: center; color: #999;">
+                            <i class="fas fa-users fa-3x mb-3"></i>
+                            <p>Chưa có học sinh nào trong lớp.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Student View: Two Columns -->
+            <div class="assignment-main-column">
+                <div class="assignment-card">
+                    <div class="assignment-header">
+                        <div class="assignment-icon">
+                            <i class="fas fa-clipboard-list"></i>
+                        </div>
+                        <div class="assignment-title-section">
+                            <h1 class="assignment-title">@Model.Title</h1>
+                            <div class="assignment-meta">
+                                <span>@Model.Creator.FullName</span>
+                                <span>•</span>
+                                <span>@Model.CreatedAt.ToString("dd 'thg' MM")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="assignment-info">
+                        @if (Model.DueDate.HasValue)
+                        {
+                            <div class="assignment-points">
+                                <span>Đến hạn @Model.DueDate.Value.ToString("HH:mm dd 'thg' MM")</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(assignmentDescription))
+                    {
+                        <div class="assignment-description">@Html.Raw(assignmentDescription.Replace("\n", "<br>"))</div>
+                    }
+
+                    @if (Model.Attachments != null && Model.Attachments.Any())
+                    {
+                        <div class="post-attachments">
+                            @foreach (var attachment in Model.Attachments)
+                            {
+                                @if (attachment.Type == "YouTube")
+                                {
+                                    <div class="post-attachment-card youtube-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@(!string.IsNullOrEmpty(attachment.Title) ? attachment.Title : "YouTube")</div>
+                                            <div class="attachment-subtitle">@attachment.Url</div>
+                                        </div>
+                                        <div class="attachment-thumbnail">
+                                            @if (!string.IsNullOrEmpty(attachment.VideoId))
+                                            {
+                                                <img src="https://img.youtube.com/vi/@attachment.VideoId/mqdefault.jpg" alt="YouTube thumbnail" />
+                                            }
+                                            else
+                                            {
+                                                <i class="fab fa-youtube"></i>
+                                            }
+                                        </div>
+                                        <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                    </div>
+                                }
+                                else if (attachment.Type == "Link")
+                                {
+                                    <div class="post-attachment-card link-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@attachment.Title</div>
+                                            <div class="attachment-subtitle">@attachment.Url</div>
+                                        </div>
+                                        <div class="attachment-icon">
+                                            <i class="fas fa-link"></i>
+                                        </div>
+                                        <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                    </div>
+                                }
+                                else if (attachment.Type == "File")
+                                {
+                                    <div class="post-attachment-card file-card">
+                                        <div class="attachment-info">
+                                            <div class="attachment-title">@attachment.FileName</div>
+                                            <div class="attachment-subtitle">Tệp đính kèm</div>
+                                        </div>
+                                        <div class="attachment-icon">
+                                            <i class="fas fa-file"></i>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(attachment.Url))
+                                        {
+                                            <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+
+                    <div class="assignment-comments-section">
+                        <div class="comments-header">
+                            <i class="fas fa-comments"></i>
+                            <span>Nhận xét của lớp học</span>
+                        </div>
+                        <div class="comments-list" id="assignmentCommentsList">
+                            @if (assignmentComments.Any())
+                            {
+                                @foreach (var comment in assignmentComments)
+                                {
+                                    var canDeletePublicStudent = comment.UserId == userId || (isTeacher && studentIds.Contains(comment.UserId));
+                                    var canEditPublicStudent = isTeacher && comment.UserId == userId; // Chỉ giáo viên có thể sửa comment của mình
+                                    <div class="comment-item" data-comment-id="@comment.Id">
+                                        <div class="comment-avatar">
+                                            @if (!string.IsNullOrEmpty(comment.User.AvatarUrl))
+                                            {
+                                                <img src="@comment.User.AvatarUrl" alt="@comment.User.FullName" class="comment-avatar-img" />
+                                            }
+                                            else
+                                            {
+                                                @comment.User.FullName.First()
+                                            }
+                                        </div>
+                                        <div class="comment-content">
+                                            <div class="comment-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                                <div class="comment-author">@comment.User.FullName</div>
+                                                @if (canDeletePublicStudent || canEditPublicStudent)
+                                                {
+                                                    <div class="comment-menu" style="position: relative;">
+                                                        <button type="button" class="comment-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; position: relative; z-index: 10;" onclick="toggleCommentMenu(this, event)">
+                                                            <i class="fas fa-ellipsis-v"></i>
+                                                        </button>
+                                                        <div class="comment-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                            @if (canEditPublicStudent)
+                                                            {
+                                                                <button type="button" class="comment-edit-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #1976d2; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="openEditCommentModal(@comment.Id, this, event)" data-comment-content="@Html.Raw(comment.Content.Replace("\"", "&quot;").Replace("\r", "").Replace("\n", "&#10;"))">
+                                                                    <i class="fas fa-edit" style="margin-right: 8px;"></i>Chỉnh sửa
+                                                                </button>
+                                                            }
+                                                            @if (canDeletePublicStudent)
+                                                            {
+                                                                <button type="button" class="comment-delete-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="deletePrivateComment(@comment.Id, this, event)">
+                                                                    <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="comment-text">@comment.Content</div>
+                                            <div class="comment-time">@comment.CreatedAt.ToString("HH:mm dd 'thg' MM")</div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="comments-empty">Chưa có nhận xét nào.</div>
+                            }
+                        </div>
+                        <form class="comment-form" method="post" action="@Url.Action("Create", "Comments")">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="classId" value="@Model.ClassId" />
+                            <input type="hidden" name="entityType" value="assignment" />
+                            <input type="hidden" name="entityId" value="@Model.Id" />
+                            <div class="comment-input-wrapper">
+                                <div class="comment-avatar-small" style="overflow: hidden;">
+                                    @if (!string.IsNullOrEmpty((string?)ViewBag.CurrentUserAvatarUrl))
+                                    {
+                                        <img src="@ViewBag.CurrentUserAvatarUrl" alt="@User.Identity?.Name" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                    }
+                                    else
+                                    {
+                                        @User.Identity?.Name?.First()
+                                    }
+                                </div>
+                                <input type="text" name="content" class="comment-input" placeholder="Thêm nhận xét trong lớp học..." />
+                                <button type="submit" class="comment-submit-btn">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Work Column -->
+            <div class="assignment-sidebar-column">
+                <div class="student-work-card">
+                    <div class="student-work-header">
+                        <h3>Bài tập của bạn</h3>
+                        <span class="student-work-state @(userSubmission != null ? "submitted" : "assigned")">
+                            @(userSubmission != null ? "Đã nộp" : "Đã giao")
+                        </span>
+                    </div>
+
+                    @if (Model.DueDate.HasValue)
+                    {
+                        <div class="due-date-info">
+                            <i class="fas fa-clock"></i>
+                            <span>Đến hạn @Model.DueDate.Value.ToString("HH:mm dd 'thg' MM")</span>
+                        </div>
+                    }
+
+                    @if (userSubmission != null)
+                    {
+                        <div class="student-submission-summary">
+                            <div class="student-submission-time">
+                                <i class="fas fa-check-circle"></i>
+                                Đã nộp lúc @userSubmission.SubmittedAt.ToString("HH:mm dd/MM/yyyy")
+                            </div>
+                            @if (userSubmission.Attachments != null && userSubmission.Attachments.Any())
+                            {
+                                <div class="student-submission-files">
+                                    @foreach (var attachment in userSubmission.Attachments)
+                                    {
+                                        var attachmentUrl = attachment.Url ?? string.Empty;
+                                        <a href="@attachment.Url"
+                                           target="_blank"
+                                           class="student-submitted-chip">
+                                            <div class="student-submitted-chip-info">
+                                                <div class="student-submitted-chip-title">@(!string.IsNullOrWhiteSpace(attachment.Title) ? attachment.Title : (attachment.FileName ?? "Tệp đính kèm"))</div>
+                                                <div class="student-submitted-chip-subtitle">@attachmentUrl</div>
+                                            </div>
+                                            <div class="student-submitted-chip-icon">
+                                                @if (attachment.Type == "Link" && attachmentUrl.Contains("drive.google", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    <i class="fab fa-google-drive"></i>
+                                                }
+                                                else if (attachment.Type == "Link")
+                                                {
+                                                    <i class="fas fa-link"></i>
+                                            }
+                                            else
+                                            {
+                                                    <i class="fas fa-file-alt"></i>
+                                                }
+                                                </div>
+                                        </a>
+                                            }
+                                        </div>
+                                    }
+                            else
+                            {
+                                <div class="student-submission-empty">
+                                    Bạn đã nộp bài mà không đính kèm tệp nào.
+                                </div>
+                            }
+                        </div>
+
+                        @if (Model.DueDate.HasValue)
+                        {
+                            if (DateTime.Now <= Model.DueDate.Value)
+                            {
+                                <form method="post" action="@Url.Action("Unsubmit", "Submissions")" class="student-unsubmit-form">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="assignmentId" value="@Model.Id" />
+                                    <button type="submit" class="btn-unsubmit">Huỷ nộp bài</button>
+                                </form>
+                            }
+                            else
+                        {
+                            <div class="due-date-warning">
+                                    Không thể huỷ nộp bài sau ngày đến hạn
+                            </div>
+                            }
+                        }
+                        else
+                        {
+                            <form method="post" action="@Url.Action("Unsubmit", "Submissions")" class="student-unsubmit-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="assignmentId" value="@Model.Id" />
+                                <button type="submit" class="btn-unsubmit">Huỷ nộp bài</button>
+                            </form>
+                        }
+
+                        @if (userSubmission.Score.HasValue)
+                        {
+                            <div class="submission-score">
+                                <strong>Điểm:</strong> @userSubmission.Score
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(userSubmission.TeacherComment))
+                        {
+                            <div class="teacher-comment">
+                                <strong>Nhận xét của giáo viên:</strong>
+                                <p>@userSubmission.TeacherComment</p>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @if (Model.DueDate.HasValue && DateTime.Now > Model.DueDate.Value)
+                        {
+                            <div class="due-date-warning" style="margin-top: 1rem;">
+                                    Không thể nộp bài tập sau ngày đến hạn
+                                </div>
+                            }
+                        else
+                        {
+                            <form class="student-submit-form"
+                                  method="post"
+                                  enctype="multipart/form-data"
+                                  action="@Url.Action("SubmitWork", "Submissions")"
+                                  id="studentSubmitForm">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="assignmentId" value="@Model.Id" />
+                                <input type="file" id="studentFileInput" name="files" multiple style="display:none;" />
+                                <div id="studentLinkHiddenInputs"></div>
+
+                                <div class="student-add-menu">
+                                    <button type="button" class="student-add-btn" id="studentAttachmentToggle">
+                                        <i class="fas fa-plus me-2"></i>Thêm hoặc tạo
+                                    </button>
+                                    <div class="student-add-dropdown" id="studentAttachmentDropdown">
+                                        <button type="button" data-attachment-action="add-link">
+                                            <i class="fas fa-link me-2"></i>Đường liên kết
+                                        </button>
+                                        <button type="button" data-attachment-action="add-file">
+                                            <i class="fas fa-paperclip me-2"></i>Tệp
+                                        </button>
+                        </div>
+                                </div>
+
+                                <div class="student-selected-items" id="studentSelectedItems">
+                                    <div class="student-selected-placeholder">
+                                        Chưa có tệp hoặc đường dẫn nào được chọn.
+                                    </div>
+                                </div>
+
+                                <div class="student-submit-actions">
+                                    <button type="submit" class="btn-submit full-width" id="studentSubmitButton" disabled>
+                                        <i class="fas fa-upload me-1" id="studentSubmitButtonIcon"></i>
+                                        <span id="studentSubmitButtonText">Nộp bài</span>
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                    }
+
+                    <div class="private-comments-section">
+                        <div class="comments-header">
+                            <i class="fas fa-user-secret"></i>
+                            <span>Nhận xét riêng tư</span>
+                        </div>
+                        <div class="comments-list" id="privateCommentsList">
+                            @if (privateComments.Any())
+                            {
+                                @foreach (var comment in privateComments)
+                                {
+                                    <div class="comment-item" data-comment-id="@comment.Id">
+                                        <div class="comment-avatar">
+                                            @if (!string.IsNullOrEmpty(comment.User.AvatarUrl))
+                                            {
+                                                <img src="@comment.User.AvatarUrl" alt="@comment.User.FullName" class="comment-avatar-img" />
+                                            }
+                                            else
+                                            {
+                                                @comment.User.FullName.First()
+                                            }
+                                        </div>
+                                        <div class="comment-content">
+                                            <div class="comment-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                                <div class="comment-author">@comment.User.FullName</div>
+                                                @if (comment.UserId == userId)
+                                                {
+                                                    <div class="comment-menu" style="position: relative;">
+                                                        <button type="button" class="comment-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; position: relative; z-index: 10;" onclick="toggleCommentMenu(this, event)">
+                                                            <i class="fas fa-ellipsis-v"></i>
+                                                        </button>
+                                                        <div class="comment-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                            <button type="button" class="comment-delete-btn" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" onclick="deletePrivateComment(@comment.Id, this, event)">
+                                                                <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="comment-text">@comment.Content</div>
+                                            <div class="comment-time">@comment.CreatedAt.ToString("HH:mm dd 'thg' MM")</div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="comments-empty">Chưa có nhận xét riêng tư nào.</div>
+                            }
+                        </div>
+                        <form class="comment-form" method="post" action="@Url.Action("Create", "Comments")">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="classId" value="@Model.ClassId" />
+                            <input type="hidden" name="entityType" value="assignment" />
+                            <input type="hidden" name="entityId" value="@Model.Id" />
+                            @if (userSubmission != null)
+                            {
+                                <input type="hidden" name="submissionId" value="@userSubmission.Id" />
+                            }
+                            <input type="hidden" name="isPrivate" value="true" />
+                            <input type="hidden" name="targetUserId" value="@userId" />
+                            <div class="comment-input-wrapper">
+                                <div class="comment-avatar-small" style="overflow: hidden;">
+                                    @if (!string.IsNullOrEmpty((string?)ViewBag.CurrentUserAvatarUrl))
+                                    {
+                                        <img src="@ViewBag.CurrentUserAvatarUrl" alt="@User.Identity?.Name" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                                    }
+                                    else
+                                    {
+                                        @User.Identity?.Name?.First()
+                                    }
+                                </div>
+                                <input type="text" name="content" class="comment-input" placeholder="Thêm nhận xét cho @Model.Creator.FullName..." />
+                                <button type="submit" class="comment-submit-btn">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="assignment-back-button">
+        <a asp-controller="Classes" asp-action="Details" asp-route-id="@Model.ClassId" class="btn-back">
+            <i class="fas fa-arrow-left"></i>
+            <span>Quay lại</span>
+        </a>
+    </div>
+
+
+
+    @if (!isTeacher)
+    {
+    <div class="student-link-modal" id="studentLinkModal">
+        <div class="student-link-modal-content">
+            <h4>Thêm đường liên kết</h4>
+            <label class="student-link-field">
+                <span>Tiêu đề (tùy chọn)</span>
+                <input type="text" id="studentLinkTitleInput" placeholder="Ví dụ: Tài liệu tham khảo" />
+            </label>
+            <label class="student-link-field">
+                <span>Đường liên kết *</span>
+                <input type="url" id="studentLinkUrlInput" placeholder="https://..." required />
+            </label>
+            <div class="student-link-modal-actions">
+                <button type="button" class="student-link-cancel" id="studentLinkModalCancel">Huỷ</button>
+                <button type="button" class="student-link-submit" id="studentLinkModalAdd" disabled>Thêm đường liên kết</button>
+</div>
+        </div>
+    </div>
+    }
+
+    <!-- Delete Comment Confirmation Modal - Available for both Teachers and Students -->
+    <div class="announcement-submodal" id="deleteCommentModal" style="display: none; z-index: 5000;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Xóa nhận xét?</h4>
+                <button type="button" class="announcement-modal-close" id="closeDeleteCommentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <p>Bạn có chắc chắn muốn xóa nhận xét này không?</p>
+            </div>
+            <div class="announcement-submodal-footer">
+                <button type="button" class="announcement-btn-cancel" id="cancelDeleteComment">Huỷ</button>
+                <button type="button" class="announcement-btn-post danger" id="confirmDeleteComment">Xóa</button>
+            </div>
+        </div>
+    </div>
+
+    @if (isTeacher)
+    {
+    <form id="assignmentDeleteForm"
+          method="post"
+          action="@Url.Action("Delete", "Assignments")"
+          style="display:none;">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@Model.Id" />
+    </form>
+
+    <div class="announcement-modal" id="assignmentModal" style="display:none;">
+        <div class="announcement-modal-content">
+            <div class="announcement-modal-header">
+                <h3>Chỉnh sửa bài tập</h3>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="assignmentForm"
+                  asp-controller="Assignments"
+                  asp-action="Edit"
+                  method="post"
+                  enctype="multipart/form-data"
+                  data-edit-url="@Url.Action("Edit","Assignments")"
+                  data-fetch-url="@Url.Action("Get","Assignments")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="assignmentIdField" value="@Model.Id" />
+                <input type="hidden" name="ClassId" value="@Model.ClassId" />
+                <input type="hidden" name="attachmentsJson" id="assignmentAttachmentsJson" />
+                <input type="hidden" name="removedAttachmentIds" id="assignmentRemovedAttachmentIds" />
+                <div class="announcement-modal-body">
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentTitle">Tiêu đề</label>
+                        <input type="text"
+                               id="assignmentTitle"
+                               name="Title"
+                               class="announcement-input"
+                               placeholder="Nhập tiêu đề bài tập" />
+                    </div>
+                    <div class="announcement-content-section">
+                        <label class="announcement-label" for="assignmentDescription">Mô tả</label>
+                        <textarea id="assignmentDescription"
+                                  name="Description"
+                                  class="announcement-textarea"
+                                  rows="6"
+                                  placeholder="Hướng dẫn chi tiết cho học sinh"></textarea>
+                        <input type="file" id="assignmentFileInput" name="attachedFiles" multiple style="display:none;" />
+                        <input type="file" id="assignmentFileSelector" multiple style="display:none;" />
+                    </div>
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentPublishAt">Ngày hẹn đăng bài (tùy chọn)</label>
+                        <input type="datetime-local" id="assignmentPublishAt" name="PublishAt" class="announcement-input" />
+                        <small class="announcement-helper-text">Để trống để giữ nguyên thời gian đăng.</small>
+                    </div>
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentDueDate">Ngày hết hạn</label>
+                        <input type="datetime-local" id="assignmentDueDate" name="DueDate" class="announcement-input" />
+                    </div>
+                    <div class="announcement-toolbar">
+                        <div class="announcement-format-toolbar">
+                            <button type="button" class="toolbar-btn" data-assignment-format="list" title="Bullet list">
+                                <i class="fas fa-list-ul"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" data-assignment-format="emoji" title="Emoji">
+                                <i class="far fa-smile"></i>
+                            </button>
+                        </div>
+                        <div class="announcement-attach-toolbar">
+                            <button type="button" class="toolbar-btn" id="assignmentYoutubeBtn" title="YouTube">
+                                <i class="fab fa-youtube"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="assignmentUploadFileBtn" title="Upload file">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="assignmentLinkBtn" title="Link">
+                                <i class="fas fa-link"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="assignmentAttachedItems" class="announcement-attached-items" style="display:none;"></div>
+                </div>
+                <div class="announcement-modal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentModal">Huỷ</button>
+                    <button type="submit" class="announcement-btn-post" id="saveAssignmentBtn" disabled>Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="announcement-submodal" id="assignmentYoutubeModal" style="display:none;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm video YouTube</h4>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentYoutubeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <label class="announcement-label">URL YouTube</label>
+                <input type="text" id="assignmentYoutubeUrl" class="announcement-input" placeholder="https://www.youtube.com/watch?v=..." />
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentYoutube">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addAssignmentYoutube" disabled>Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="announcement-submodal" id="assignmentLinkModal" style="display:none;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm liên kết</h4>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentLinkModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <div class="announcement-form-group">
+                    <label class="announcement-label">Văn bản hiển thị</label>
+                    <input type="text" id="assignmentLinkText" class="announcement-input" placeholder="Văn bản liên kết" />
+                </div>
+                <div class="announcement-form-group">
+                    <label class="announcement-label">URL</label>
+                    <input type="text" id="assignmentLinkUrl" class="announcement-input" placeholder="https://..." />
+                </div>
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentLink">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addAssignmentLink" disabled>Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="announcement-error-modal" id="errorModal" style="display:none;">
+        <div class="announcement-error-modal-content">
+            <div class="announcement-error-modal-header">
+                <div class="announcement-error-icon">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <h4>Thông báo</h4>
+                <button type="button" class="announcement-modal-close" id="closeErrorModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-error-modal-body">
+                <p id="errorMessage"></p>
+            </div>
+            <div class="announcement-error-modal-footer">
+                <button type="button" class="announcement-btn-post" id="confirmError">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Assignment Confirmation Modal -->
+    <div class="announcement-submodal" id="deleteAssignmentConfirmModal" style="display: none; z-index: 5000;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Xóa bài tập?</h4>
+                <button type="button" class="announcement-modal-close" id="closeDeleteAssignmentConfirmModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <p id="deleteAssignmentConfirmMessage">Bạn có chắc chắn muốn xóa bài tập này không?</p>
+            </div>
+            <div class="announcement-submodal-footer">
+                <button type="button" class="announcement-btn-cancel" id="cancelDeleteAssignmentConfirm">Huỷ</button>
+                <button type="button" class="announcement-btn-post danger" id="confirmDeleteAssignmentConfirm">Xóa</button>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        function showErrorModal(message) {
+            const errorModal = document.getElementById('errorModal');
+            const errorMessage = document.getElementById('errorMessage');
+            const closeErrorModal = document.getElementById('closeErrorModal');
+            const confirmError = document.getElementById('confirmError');
+
+            if (!errorModal || !errorMessage) {
+                alert(message);
+                return;
+            }
+
+            errorMessage.textContent = message;
+            errorModal.style.display = 'flex';
+
+            function closeModal() {
+                errorModal.style.display = 'none';
+            }
+
+            if (closeErrorModal) {
+                closeErrorModal.onclick = closeModal;
+            }
+
+            if (confirmError) {
+                confirmError.onclick = closeModal;
+            }
+
+            errorModal.onclick = function(e) {
+                if (e.target === errorModal) {
+                    closeModal();
+                }
+            };
+        }
+
+        function generateTempId() {
+            return 'att-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+        }
+
+        function showEmojiPicker(textarea, start, end, selectedText) {
+            const emojis = [
+                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+                '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+                '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+                '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+                '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+                '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+                '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+                '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐',
+                '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈',
+                '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾',
+                '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'
+            ];
+
+            const existingPicker = document.getElementById('emojiPicker');
+            if (existingPicker) {
+                existingPicker.remove();
+            }
+
+            const picker = document.createElement('div');
+            picker.id = 'emojiPicker';
+            picker.className = 'emoji-picker';
+
+            emojis.forEach(emoji => {
+                const emojiBtn = document.createElement('button');
+                emojiBtn.type = 'button';
+                emojiBtn.className = 'emoji-picker-item';
+                emojiBtn.textContent = emoji;
+                emojiBtn.addEventListener('click', function() {
+                    const emojiText = selectedText ? `${selectedText} ${emoji}` : emoji;
+                    textarea.value = textarea.value.substring(0, start) + emojiText + textarea.value.substring(end);
+                    textarea.focus();
+                    const newPos = start + emojiText.length;
+                    textarea.setSelectionRange(newPos, newPos);
+                    textarea.dispatchEvent(new Event('input'));
+                    picker.remove();
+                });
+                picker.appendChild(emojiBtn);
+            });
+
+            const textareaRect = textarea.getBoundingClientRect();
+            picker.style.position = 'absolute';
+            picker.style.top = (textareaRect.bottom + 5) + 'px';
+            picker.style.left = textareaRect.left + 'px';
+            picker.style.zIndex = '3000';
+
+            document.body.appendChild(picker);
+
+            setTimeout(() => {
+                const closePicker = (e) => {
+                    if (!picker.contains(e.target) && e.target !== textarea) {
+                        picker.remove();
+                        document.removeEventListener('click', closePicker);
+                    }
+                };
+                document.addEventListener('click', closePicker);
+            }, 100);
+        }
+
+        let openEditAssignmentModal = () => {};
+
+        // Handle comment form submission
+        const commentForms = document.querySelectorAll('.comment-form');
+        commentForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const content = formData.get('content');
+                if (!content || !content.trim()) return;
+
+                // Lưu tab hiện tại trước khi reload
+                const activeTab = document.querySelector('.assignment-tab.active');
+                if (activeTab) {
+                    const currentTab = activeTab.getAttribute('data-tab');
+                    if (currentTab) {
+                        sessionStorage.setItem('assignmentActiveTab', currentTab);
+                    }
+                }
+
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'RequestVerificationToken': formData.get('__RequestVerificationToken')
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    }
+                })
+                .catch(err => console.error('Error:', err));
+            });
+        });
+
+        // Handle grade form submission - validate score range (0-100)
+        const gradeForms = document.querySelectorAll('.submission-grade-form');
+        gradeForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                const scoreInput = this.querySelector('.grade-input');
+                if (scoreInput) {
+                    const score = scoreInput.value.trim();
+                    if (score !== '') {
+                        const scoreValue = parseInt(score, 10);
+                        if (isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+                            e.preventDefault();
+                            alert('Điểm số phải từ 0 đến 100.');
+                            scoreInput.focus();
+                            return false;
+                        }
+                    }
+                }
+            });
+        });
+
+        // Validate score input on change
+        const gradeInputs = document.querySelectorAll('.grade-input');
+        gradeInputs.forEach(input => {
+            input.addEventListener('input', function () {
+                const value = this.value.trim();
+                if (value !== '') {
+                    const scoreValue = parseInt(value, 10);
+                    if (!isNaN(scoreValue)) {
+                        if (scoreValue < 0) {
+                            this.value = 0;
+                        } else if (scoreValue > 100) {
+                            this.value = 100;
+                        }
+                    }
+                }
+            });
+        });
+
+        // Student submission form interactions
+        (function () {
+            const studentSubmitForm = document.getElementById('studentSubmitForm');
+            if (!studentSubmitForm) return;
+
+            const studentFileInput = document.getElementById('studentFileInput');
+            const studentSelectedItems = document.getElementById('studentSelectedItems');
+            const studentAttachmentToggle = document.getElementById('studentAttachmentToggle');
+            const studentAttachmentDropdown = document.getElementById('studentAttachmentDropdown');
+            const studentSubmitButton = document.getElementById('studentSubmitButton');
+            const studentSubmitButtonIcon = document.getElementById('studentSubmitButtonIcon');
+            const studentSubmitButtonText = document.getElementById('studentSubmitButtonText');
+            const studentLinkHiddenInputs = document.getElementById('studentLinkHiddenInputs');
+
+            const studentLinkModal = document.getElementById('studentLinkModal');
+            const studentLinkTitleInput = document.getElementById('studentLinkTitleInput');
+            const studentLinkUrlInput = document.getElementById('studentLinkUrlInput');
+            const studentLinkModalAdd = document.getElementById('studentLinkModalAdd');
+            const studentLinkModalCancel = document.getElementById('studentLinkModalCancel');
+
+            const linkOption = studentAttachmentDropdown?.querySelector('[data-attachment-action="add-link"]');
+            const fileOption = studentAttachmentDropdown?.querySelector('[data-attachment-action="add-file"]');
+
+            let studentFiles = [];
+            let studentLinks = [];
+
+            function closeDropdown() {
+                studentAttachmentDropdown?.classList.remove('show');
+            }
+
+            studentAttachmentToggle?.addEventListener('click', function (e) {
+                e.stopPropagation();
+                studentAttachmentDropdown?.classList.toggle('show');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.student-add-menu')) {
+                    closeDropdown();
+                }
+            });
+
+            function syncStudentFileInput() {
+                if (!studentFileInput) return;
+                const dataTransfer = new DataTransfer();
+                studentFiles.forEach(fileEntry => dataTransfer.items.add(fileEntry.file));
+                studentFileInput.files = dataTransfer.files;
+            }
+
+            function syncHiddenLinkInputs() {
+                if (!studentLinkHiddenInputs) return;
+                studentLinkHiddenInputs.innerHTML = '';
+                studentLinks.forEach(link => {
+                    const titleInput = document.createElement('input');
+                    titleInput.type = 'hidden';
+                    titleInput.name = 'linkTitles';
+                    titleInput.value = link.title;
+
+                    const urlInput = document.createElement('input');
+                    urlInput.type = 'hidden';
+                    urlInput.name = 'linkUrls';
+                    urlInput.value = link.url;
+
+                    studentLinkHiddenInputs.appendChild(titleInput);
+                    studentLinkHiddenInputs.appendChild(urlInput);
+                });
+            }
+
+                function updateSubmitButton() {
+                    if (!studentSubmitButton || !studentSubmitButtonIcon || !studentSubmitButtonText) return;
+                    const hasItems = studentFiles.length > 0 || studentLinks.length > 0;
+                    // Chỉ enable/disable nút, không đổi text hay icon
+                    studentSubmitButton.disabled = !hasItems;
+                }
+
+            function renderStudentSelectedItems() {
+                if (!studentSelectedItems) return;
+                studentSelectedItems.innerHTML = '';
+
+                if (!studentFiles.length && !studentLinks.length) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'student-selected-placeholder';
+                    placeholder.textContent = 'Chưa có tệp hoặc đường dẫn nào được chọn.';
+                    studentSelectedItems.appendChild(placeholder);
+                    updateSubmitButton();
+                    return;
+                }
+
+                const combinedItems = [
+                    ...studentLinks.map(link => ({
+                        type: 'link',
+                        tempId: link.tempId,
+                        title: link.title,
+                        subtitle: link.url
+                    })),
+                    ...studentFiles.map(file => ({
+                        type: 'file',
+                        tempId: file.tempId,
+                        title: file.file.name,
+                        subtitle: 'Tệp đính kèm'
+                    }))
+                ];
+
+                combinedItems.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'student-selected-item';
+                    row.innerHTML = `
+                        <div class="student-selected-text">
+                            <i class="${item.type === 'link' ? 'fas fa-link' : 'fas fa-paperclip'}"></i>
+                            <span>${item.title}</span>
+                        </div>
+                        <button type="button" class="student-remove-selected" data-remove-temp="${item.tempId}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    studentSelectedItems.appendChild(row);
+                });
+
+                updateSubmitButton();
+            }
+
+            function addStudentLink(title, url) {
+                studentLinks.push({
+                    tempId: generateTempId(),
+                    title: title || url,
+                    url
+                });
+                syncHiddenLinkInputs();
+                renderStudentSelectedItems();
+            }
+
+            function openLinkModal() {
+                if (!studentLinkModal) return;
+                studentLinkModal.classList.add('show');
+                studentLinkTitleInput.value = '';
+                studentLinkUrlInput.value = '';
+                studentLinkModalAdd.disabled = true;
+                setTimeout(() => studentLinkUrlInput?.focus(), 0);
+            }
+
+            function closeLinkModal() {
+                studentLinkModal?.classList.remove('show');
+            }
+
+            studentLinkUrlInput?.addEventListener('input', function () {
+                if (studentLinkModalAdd) {
+                    studentLinkModalAdd.disabled = !this.value.trim();
+                }
+            });
+
+            studentLinkModalAdd?.addEventListener('click', function () {
+                const url = studentLinkUrlInput?.value.trim();
+                if (!url) return;
+                const title = studentLinkTitleInput?.value.trim();
+                addStudentLink(title || url, url);
+                closeLinkModal();
+            });
+
+            studentLinkModalCancel?.addEventListener('click', closeLinkModal);
+            studentLinkModal?.addEventListener('mousedown', function (e) {
+                if (e.target === studentLinkModal) {
+                    e.preventDefault();
+                }
+            });
+            studentLinkModal?.addEventListener('click', function (e) {
+                if (e.target === studentLinkModal) {
+                    e.stopPropagation();
+                    closeLinkModal();
+                }
+            });
+
+            linkOption?.addEventListener('click', function () {
+                closeDropdown();
+                openLinkModal();
+            });
+
+            fileOption?.addEventListener('click', function () {
+                closeDropdown();
+                studentFileInput?.click();
+            });
+
+            studentFileInput?.addEventListener('change', function () {
+                if (!this.files || !this.files.length) return;
+                const pickedFiles = Array.from(this.files);
+                this.value = '';
+
+                pickedFiles.forEach(file => {
+                    studentFiles.push({
+                        tempId: generateTempId(),
+                        file
+                    });
+                });
+                syncStudentFileInput();
+                renderStudentSelectedItems();
+            });
+
+            studentSelectedItems?.addEventListener('click', function (e) {
+                const removeBtn = e.target.closest('[data-remove-temp]');
+                if (!removeBtn) return;
+                const tempId = removeBtn.getAttribute('data-remove-temp');
+                studentFiles = studentFiles.filter(file => file.tempId !== tempId);
+                studentLinks = studentLinks.filter(link => link.tempId !== tempId);
+                syncStudentFileInput();
+                syncHiddenLinkInputs();
+                renderStudentSelectedItems();
+            });
+
+            renderStudentSelectedItems();
+        })();
+
+        // Assignment action menu for teachers
+        const assignmentDeleteForm = document.getElementById('assignmentDeleteForm');
+        
+        // Kiểm tra form có tồn tại không
+        if (!assignmentDeleteForm) {
+            console.warn('Assignment delete form not found. Make sure you are logged in as a teacher.');
+        }
+        
+        const closeAllAssignmentMenus = () => {
+            document.querySelectorAll('.assignment-menu-dropdown.show')
+                .forEach(menu => menu.classList.remove('show'));
+        };
+
+        document.addEventListener('click', function (e) {
+            const toggle = e.target.closest('[data-assignment-menu-toggle]');
+            if (toggle) {
+                e.stopPropagation();
+                const dropdown = toggle.nextElementSibling;
+                if (!dropdown) return;
+                const isOpen = dropdown.classList.contains('show');
+                closeAllAssignmentMenus();
+                if (!isOpen) {
+                    dropdown.classList.add('show');
+                }
+                return;
+            }
+
+            const actionBtn = e.target.closest('[data-assignment-action]');
+            if (actionBtn) {
+                const action = actionBtn.getAttribute('data-assignment-action');
+                closeAllAssignmentMenus();
+
+                if (action === 'edit') {
+                    const assignmentId = actionBtn.getAttribute('data-assignment-id');
+                    if (assignmentId) {
+                        openEditAssignmentModal(assignmentId);
+                    }
+                } else if (action === 'delete') {
+                    if (!assignmentDeleteForm) {
+                        console.error('Assignment delete form not found!');
+                        alert('Không tìm thấy form xóa bài tập. Vui lòng tải lại trang.');
+                        return;
+                    }
+                    
+                    const confirmation = actionBtn.getAttribute('data-confirmation')
+                        || 'Bạn có chắc chắn muốn xoá bài tập này?';
+                    
+                    // Hiển thị modal xác nhận xóa assignment
+                    openDeleteAssignmentConfirmModal(confirmation, assignmentDeleteForm);
+                }
+                return;
+            }
+
+            if (!e.target.closest('.assignment-actions')) {
+                closeAllAssignmentMenus();
+            }
+        });
+
+        // Assignment tabs for teachers
+        const assignmentTabs = document.querySelectorAll('.assignment-tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        // Khôi phục tab đã lưu từ sessionStorage
+        const savedTab = sessionStorage.getItem('assignmentActiveTab');
+        const wasTabRestored = !!savedTab;
+        const savedStudentId = sessionStorage.getItem('assignmentSelectedStudentId'); // Lấy studentId trước khi xóa savedTab
+        
+        if (savedTab) {
+            const savedTabElement = document.querySelector(`.assignment-tab[data-tab="${savedTab}"]`);
+            if (savedTabElement) {
+                // Remove active class from all tabs and contents
+                assignmentTabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => {
+                    c.classList.remove('active');
+                    c.style.display = 'none';
+                });
+                
+                // Add active class to saved tab and corresponding content
+                savedTabElement.classList.add('active');
+                const targetContent = document.getElementById(savedTab + 'Tab');
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                    targetContent.style.display = 'block';
+                }
+                
+                // Xóa tab đã lưu sau khi khôi phục
+                sessionStorage.removeItem('assignmentActiveTab');
+            }
+        }
+        
+        // Kiểm tra xem có học sinh cần chọn từ sessionStorage không (khi click từ bảng điểm)
+        if (savedStudentId && savedTab === 'submissions') {
+            // Chờ một chút để đảm bảo tab đã được khôi phục và hiển thị
+            setTimeout(() => {
+                const studentRows = document.querySelectorAll('[data-student-row]');
+                const detailCards = document.querySelectorAll('[data-student-detail]');
+                
+                if (studentRows.length > 0) {
+                    // So sánh studentId dạng string
+                    studentRows.forEach(row => {
+                        const rowStudentId = row.getAttribute('data-student-id');
+                        row.classList.toggle('active', rowStudentId === savedStudentId);
+                    });
+                    
+                    detailCards.forEach(card => {
+                        const cardStudentId = card.getAttribute('data-student-detail');
+                        card.style.display = cardStudentId === savedStudentId ? 'block' : 'none';
+                    });
+                    
+                    // Cuộn đến phần submissions để người dùng thấy được học sinh đã chọn
+                    const submissionsTab = document.getElementById('submissionsTab');
+                    if (submissionsTab) {
+                        submissionsTab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+                
+                // Xóa studentId đã lưu sau khi chọn
+                sessionStorage.removeItem('assignmentSelectedStudentId');
+            }, 150);
+        }
+        
+        assignmentTabs.forEach(tab => {
+            tab.addEventListener('click', function () {
+                const targetTab = this.getAttribute('data-tab');
+                
+                // Remove active class from all tabs and contents
+                assignmentTabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => {
+                    c.classList.remove('active');
+                    c.style.display = 'none';
+                });
+                
+                // Add active class to clicked tab and corresponding content
+                this.classList.add('active');
+                const targetContent = document.getElementById(targetTab + 'Tab');
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                    targetContent.style.display = 'block';
+                }
+            });
+        });
+
+        const privateCommentForms = document.querySelectorAll('.comment-form');
+        privateCommentForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                // Tìm studentId từ form này (từ input targetUserId hoặc từ data-student-detail của card cha)
+                const formCard = this.closest('[data-student-detail]');
+                if (formCard) {
+                    const studentId = formCard.getAttribute('data-student-detail');
+                    if (studentId) {
+                        // Lưu studentId để khôi phục sau khi reload
+                        sessionStorage.setItem('assignmentSelectedStudentId', studentId);
+                    }
+                }
+            });
+        });
+
+
+        // Teacher grading: chọn học sinh để xem chi tiết
+        const studentRows = document.querySelectorAll('[data-student-row]');
+        const detailCards = document.querySelectorAll('[data-student-detail]');
+
+        function selectStudent(studentId) {
+            studentRows.forEach(row => {
+                row.classList.toggle('active', row.getAttribute('data-student-id') === studentId);
+            });
+
+            detailCards.forEach(card => {
+                card.style.display = card.getAttribute('data-student-detail') === studentId ? 'block' : 'none';
+            });
+        }
+
+        if (studentRows.length > 0) {
+            // Chỉ chọn học sinh đầu tiên mặc định nếu không có học sinh nào được chọn từ sessionStorage
+            // và tab submissions đang active (không phải từ sessionStorage restore)
+            if (!savedStudentId) {
+                const submissionsTab = document.getElementById('submissionsTab');
+                const isSubmissionsTabActive = submissionsTab && (submissionsTab.style.display !== 'none' || submissionsTab.classList.contains('active'));
+                if (isSubmissionsTabActive && !wasTabRestored) {
+                    const firstRow = studentRows[0];
+                    const firstStudentId = firstRow.getAttribute('data-student-id');
+                    if (firstStudentId && !firstRow.classList.contains('active')) {
+                        selectStudent(firstStudentId);
+                    }
+                }
+            }
+        }
+
+        studentRows.forEach(row => {
+            row.addEventListener('click', function () {
+                const id = this.getAttribute('data-student-id');
+                if (id) {
+                    selectStudent(id);
+                }
+            });
+        });
+
+        (function () {
+            const assignmentModal = document.getElementById('assignmentModal');
+            const assignmentForm = document.getElementById('assignmentForm');
+            if (!assignmentModal || !assignmentForm) {
+                return;
+            }
+
+            const closeAssignmentModalBtn = document.getElementById('closeAssignmentModal');
+            const cancelAssignmentModalBtn = document.getElementById('cancelAssignmentModal');
+            const assignmentTitleInput = document.getElementById('assignmentTitle');
+            const assignmentDescription = document.getElementById('assignmentDescription');
+            const assignmentAttachmentsContainer = document.getElementById('assignmentAttachedItems');
+            const assignmentAttachmentsJsonInput = document.getElementById('assignmentAttachmentsJson');
+            const assignmentRemovedInput = document.getElementById('assignmentRemovedAttachmentIds');
+            const assignmentIdField = document.getElementById('assignmentIdField');
+            const assignmentFileInput = document.getElementById('assignmentFileInput');
+            const assignmentFileSelector = document.getElementById('assignmentFileSelector');
+            const assignmentSaveBtn = document.getElementById('saveAssignmentBtn');
+            const assignmentPublishInput = document.getElementById('assignmentPublishAt');
+            const assignmentDueInput = document.getElementById('assignmentDueDate');
+            const assignmentYoutubeModal = document.getElementById('assignmentYoutubeModal');
+            const assignmentYoutubeBtn = document.getElementById('assignmentYoutubeBtn');
+            const assignmentYoutubeUrl = document.getElementById('assignmentYoutubeUrl');
+            const addAssignmentYoutube = document.getElementById('addAssignmentYoutube');
+            const closeAssignmentYoutubeModal = document.getElementById('closeAssignmentYoutubeModal');
+            const cancelAssignmentYoutube = document.getElementById('cancelAssignmentYoutube');
+            const assignmentLinkModal = document.getElementById('assignmentLinkModal');
+            const assignmentLinkBtn = document.getElementById('assignmentLinkBtn');
+            const assignmentLinkText = document.getElementById('assignmentLinkText');
+            const assignmentLinkUrl = document.getElementById('assignmentLinkUrl');
+            const addAssignmentLink = document.getElementById('addAssignmentLink');
+            const closeAssignmentLinkModal = document.getElementById('closeAssignmentLinkModal');
+            const cancelAssignmentLink = document.getElementById('cancelAssignmentLink');
+            const assignmentUploadFileBtn = document.getElementById('assignmentUploadFileBtn');
+            const fetchUrl = assignmentForm.dataset.fetchUrl;
+            const assignmentFormatButtons = document.querySelectorAll('[data-assignment-format]');
+
+            const assignmentState = {
+                currentId: null,
+                attachments: [],
+                files: [],
+                existingAttachments: [],
+                removedAttachmentIds: []
+            };
+
+            function updateAssignmentHiddenFields() {
+                if (assignmentAttachmentsJsonInput) {
+                    const serialized = assignmentState.attachments.map(att => ({
+                        type: att.type,
+                        title: att.title,
+                        url: att.url || null,
+                        videoId: att.videoId || null,
+                        fileName: att.fileName || null
+                    }));
+                    assignmentAttachmentsJsonInput.value = serialized.length
+                        ? JSON.stringify(serialized)
+                        : '';
+                }
+                if (assignmentRemovedInput) {
+                    assignmentRemovedInput.value = assignmentState.removedAttachmentIds.length
+                        ? JSON.stringify(assignmentState.removedAttachmentIds)
+                        : '';
+                }
+            }
+
+            function syncAssignmentFileInput() {
+                if (!assignmentFileInput) return;
+                const dataTransfer = new DataTransfer();
+                assignmentState.files.forEach(fileEntry => dataTransfer.items.add(fileEntry.file));
+                assignmentFileInput.files = dataTransfer.files;
+            }
+
+            function buildAssignmentAttachmentMarkup(data) {
+                if (data.type === 'YouTube') {
+                    const thumbnailUrl = data.videoId ? `https://img.youtube.com/vi/${data.videoId}/mqdefault.jpg` : '';
+                    return `
+                        <div class="attached-item-content">
+                            <div class="attached-item-info">
+                                <div class="attached-item-title">${data.title || 'YouTube'}</div>
+                                <div class="attached-item-subtitle">${data.url || ''}</div>
+                            </div>
+                            <div class="attached-item-thumbnail">
+                                ${thumbnailUrl ? `<img src="${thumbnailUrl}" alt="YouTube thumbnail" />` : '<i class="fab fa-youtube"></i>'}
+                            </div>
+                            <button type="button" class="attached-item-menu">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>`;
+                }
+
+                if (data.type === 'Link') {
+                    return `
+                        <div class="attached-item-content">
+                            <div class="attached-item-info">
+                                <div class="attached-item-title">${data.title}</div>
+                                <div class="attached-item-subtitle">${data.url || ''}</div>
+                            </div>
+                            <div class="attached-item-icon">
+                                <i class="fas fa-link"></i>
+                            </div>
+                            <button type="button" class="attached-item-menu">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>`;
+                }
+
+                const fileName = data.fileName || data.title || '';
+                return `
+                    <div class="attached-item-content">
+                        <div class="attached-item-info">
+                            <div class="attached-item-title">${fileName}</div>
+                            <div class="attached-item-subtitle">Tệp đính kèm</div>
+                        </div>
+                        <div class="attached-item-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <button type="button" class="attached-item-menu">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>`;
+            }
+
+            function renderAssignmentAttachments() {
+                if (!assignmentAttachmentsContainer) return;
+                assignmentAttachmentsContainer.innerHTML = '';
+
+                const items = [];
+                assignmentState.existingAttachments.forEach(att => {
+                    if (!att._removed) {
+                        items.push({ source: 'existing', identifier: att.id, data: att });
+                    }
+                });
+                assignmentState.attachments.forEach(att => items.push({ source: 'new', identifier: att.tempId, data: att }));
+                assignmentState.files.forEach(fileEntry => items.push({ source: 'file', identifier: fileEntry.tempId, data: fileEntry }));
+
+                if (!items.length) {
+                    assignmentAttachmentsContainer.style.display = 'none';
+                    return;
+                }
+
+                assignmentAttachmentsContainer.style.display = 'block';
+
+                items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'attached-item-card';
+                    card.innerHTML = buildAssignmentAttachmentMarkup(item.data);
+                    const removeBtn = card.querySelector('.attached-item-menu');
+                    if (removeBtn) {
+                        removeBtn.addEventListener('click', function() {
+                            removeAssignmentAttachment(item.source, item.identifier);
+                        });
+                    }
+                    assignmentAttachmentsContainer.appendChild(card);
+                });
+            }
+
+            function removeAssignmentAttachment(source, identifier) {
+                if (source === 'existing') {
+                    const target = assignmentState.existingAttachments.find(att => att.id === identifier);
+                    if (target) {
+                        target._removed = true;
+                        if (!assignmentState.removedAttachmentIds.includes(target.id)) {
+                            assignmentState.removedAttachmentIds.push(target.id);
+                        }
+                        updateAssignmentHiddenFields();
+                        renderAssignmentAttachments();
+                    }
+                    return;
+                }
+
+                if (source === 'file') {
+                    assignmentState.files = assignmentState.files.filter(file => file.tempId !== identifier);
+                    syncAssignmentFileInput();
+                } else {
+                    assignmentState.attachments = assignmentState.attachments.filter(att => att.tempId !== identifier);
+                    updateAssignmentHiddenFields();
+                }
+                renderAssignmentAttachments();
+            }
+
+            function addAssignmentAttachment(data) {
+                assignmentState.attachments.push({
+                    tempId: generateTempId(),
+                    ...data
+                });
+                updateAssignmentHiddenFields();
+                renderAssignmentAttachments();
+            }
+
+            function addAssignmentFile(file) {
+                assignmentState.files.push({
+                    tempId: generateTempId(),
+                    type: 'File',
+                    title: file.name,
+                    fileName: file.name,
+                    file
+                });
+                syncAssignmentFileInput();
+                renderAssignmentAttachments();
+            }
+
+            function resetAssignmentState() {
+                assignmentState.currentId = null;
+                assignmentState.attachments = [];
+                assignmentState.files = [];
+                assignmentState.existingAttachments = [];
+                assignmentState.removedAttachmentIds = [];
+                updateAssignmentHiddenFields();
+                syncAssignmentFileInput();
+                if (assignmentAttachmentsContainer) {
+                    assignmentAttachmentsContainer.innerHTML = '';
+                    assignmentAttachmentsContainer.style.display = 'none';
+                }
+            }
+
+            function closeAssignmentModal() {
+                assignmentModal.style.display = 'none';
+                document.body.style.overflow = '';
+                assignmentForm.reset();
+                resetAssignmentState();
+                closeAssignmentYoutube();
+                closeAssignmentLink();
+                if (assignmentSaveBtn) {
+                    assignmentSaveBtn.disabled = true;
+                }
+            }
+
+            function validateAssignmentForm() {
+                if (assignmentSaveBtn) {
+                    const hasTitle = assignmentTitleInput && assignmentTitleInput.value.trim().length > 0;
+                    assignmentSaveBtn.disabled = !hasTitle;
+                }
+            }
+
+            assignmentFormatButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (!assignmentDescription) return;
+                    const format = this.getAttribute('data-assignment-format');
+                    const start = assignmentDescription.selectionStart;
+                    const end = assignmentDescription.selectionEnd;
+                    const selectedText = assignmentDescription.value.substring(start, end);
+                    let formattedText = '';
+
+                    if (format === 'list') {
+                        if (selectedText) {
+                            const lines = selectedText.split('\n');
+                            formattedText = lines.map(line => line.trim() ? `• ${line}` : line).join('\n');
+                        } else {
+                            formattedText = '• ';
+                        }
+                    } else if (format === 'emoji') {
+                        showEmojiPicker(assignmentDescription, start, end, selectedText);
+                        return;
+                    }
+
+                    assignmentDescription.value = assignmentDescription.value.substring(0, start) + formattedText + assignmentDescription.value.substring(end);
+                    assignmentDescription.focus();
+                    const newPos = start + formattedText.length;
+                    assignmentDescription.setSelectionRange(newPos, newPos);
+                    assignmentDescription.dispatchEvent(new Event('input'));
+                });
+            });
+
+            if (assignmentUploadFileBtn && assignmentFileSelector) {
+                assignmentUploadFileBtn.addEventListener('click', function() {
+                    assignmentFileSelector.click();
+                });
+
+                assignmentFileSelector.addEventListener('change', function() {
+                    if (!this.files || !this.files.length) return;
+                    Array.from(this.files).forEach(file => addAssignmentFile(file));
+                    this.value = '';
+                });
+            }
+
+            function closeAssignmentYoutube() {
+                if (assignmentYoutubeModal) assignmentYoutubeModal.style.display = 'none';
+                if (assignmentYoutubeUrl) assignmentYoutubeUrl.value = '';
+                if (addAssignmentYoutube) addAssignmentYoutube.disabled = true;
+            }
+
+            function closeAssignmentLink() {
+                if (assignmentLinkModal) assignmentLinkModal.style.display = 'none';
+                if (assignmentLinkText) assignmentLinkText.value = '';
+                if (assignmentLinkUrl) assignmentLinkUrl.value = '';
+                if (addAssignmentLink) addAssignmentLink.disabled = true;
+            }
+
+            assignmentYoutubeBtn?.addEventListener('click', function() {
+                closeAssignmentYoutube();
+                if (assignmentYoutubeModal) assignmentYoutubeModal.style.display = 'flex';
+            });
+
+            closeAssignmentYoutubeModal?.addEventListener('click', closeAssignmentYoutube);
+            cancelAssignmentYoutube?.addEventListener('click', closeAssignmentYoutube);
+            assignmentYoutubeModal?.addEventListener('click', function(e) {
+                if (e.target === assignmentYoutubeModal) closeAssignmentYoutube();
+            });
+
+            if (assignmentYoutubeUrl && addAssignmentYoutube) {
+                assignmentYoutubeUrl.addEventListener('input', function() {
+                    addAssignmentYoutube.disabled = !this.value.trim();
+                });
+
+                addAssignmentYoutube.addEventListener('click', function() {
+                    const url = assignmentYoutubeUrl.value.trim();
+                    if (!url) return;
+                    let videoId = '';
+                    const patterns = [
+                        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                        /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+                    ];
+                    for (const pattern of patterns) {
+                        const match = url.match(pattern);
+                        if (match) {
+                            videoId = match[1];
+                            break;
+                        }
+                    }
+                    if (!videoId) {
+                        showErrorModal('URL YouTube không hợp lệ');
+                        return;
+                    }
+                    addAssignmentAttachment({ type: 'YouTube', title: 'YouTube', url, videoId });
+                    closeAssignmentYoutube();
+                });
+            }
+
+            assignmentLinkBtn?.addEventListener('click', function() {
+                closeAssignmentLink();
+                if (assignmentLinkModal) assignmentLinkModal.style.display = 'flex';
+            });
+
+            closeAssignmentLinkModal?.addEventListener('click', closeAssignmentLink);
+            cancelAssignmentLink?.addEventListener('click', closeAssignmentLink);
+            assignmentLinkModal?.addEventListener('click', function(e) {
+                if (e.target === assignmentLinkModal) closeAssignmentLink();
+            });
+
+            function validateAssignmentLinkInputs() {
+                if (addAssignmentLink && assignmentLinkText && assignmentLinkUrl) {
+                    const text = assignmentLinkText.value.trim();
+                    const url = assignmentLinkUrl.value.trim();
+                    addAssignmentLink.disabled = !text || !url;
+                }
+            }
+
+            assignmentLinkText?.addEventListener('input', validateAssignmentLinkInputs);
+            assignmentLinkUrl?.addEventListener('input', validateAssignmentLinkInputs);
+
+            if (addAssignmentLink && assignmentLinkText && assignmentLinkUrl) {
+                addAssignmentLink.addEventListener('click', function() {
+                    const text = assignmentLinkText.value.trim();
+                    const url = assignmentLinkUrl.value.trim();
+                    if (!text || !url) return;
+                    if (!/^https?:\/\//i.test(url)) {
+                        showErrorModal('URL phải bắt đầu bằng http:// hoặc https://');
+                        return;
+                    }
+                    addAssignmentAttachment({ type: 'Link', title: text, url });
+                    closeAssignmentLink();
+                });
+            }
+
+            closeAssignmentModalBtn?.addEventListener('click', closeAssignmentModal);
+            cancelAssignmentModalBtn?.addEventListener('click', closeAssignmentModal);
+            assignmentModal.addEventListener('click', function(e) {
+                if (e.target === assignmentModal) {
+                    closeAssignmentModal();
+                }
+            });
+
+            assignmentTitleInput?.addEventListener('input', validateAssignmentForm);
+
+            assignmentForm.addEventListener('submit', function(e) {
+                if (!assignmentTitleInput?.value.trim()) {
+                    e.preventDefault();
+                    showErrorModal('Tiêu đề bài tập là bắt buộc.');
+                    return;
+                }
+
+                const nowDate = new Date();
+                let publishDate = null;
+                if (assignmentPublishInput?.value) {
+                    publishDate = new Date(assignmentPublishInput.value);
+                    if (isNaN(publishDate.getTime())) {
+                        e.preventDefault();
+                        showErrorModal('Ngày đăng bài không hợp lệ.');
+                        return;
+                    }
+                    if (publishDate < nowDate) {
+                        e.preventDefault();
+                        showErrorModal('Ngày đăng bài không được trước thời điểm hiện tại.');
+                        return;
+                    }
+                }
+
+                let dueDate = null;
+                if (assignmentDueInput?.value) {
+                    dueDate = new Date(assignmentDueInput.value);
+                    if (isNaN(dueDate.getTime())) {
+                        e.preventDefault();
+                        showErrorModal('Ngày hết hạn không hợp lệ.');
+                        return;
+                    }
+                }
+
+                const effectivePublish = publishDate ?? nowDate;
+                if (dueDate && dueDate <= effectivePublish) {
+                    e.preventDefault();
+                    showErrorModal('Hạn nộp bài phải lớn hơn thời điểm đăng bài.');
+                    return;
+                }
+
+                if (assignmentIdField && assignmentState.currentId) {
+                    assignmentIdField.value = assignmentState.currentId;
+                }
+
+                updateAssignmentHiddenFields();
+            });
+
+            openEditAssignmentModal = function(assignmentId) {
+                if (!fetchUrl) {
+                    showErrorModal('Không thể chỉnh sửa bài tập lúc này.');
+                    return;
+                }
+
+                fetch(`${fetchUrl}?id=${assignmentId}`)
+                    .then(res => res.ok ? res.json() : Promise.reject())
+                    .then(response => {
+                        if (!response.success) {
+                            throw new Error();
+                        }
+                        const data = response.data;
+                        assignmentForm.reset();
+                        resetAssignmentState();
+                        assignmentState.currentId = data.id;
+                        assignmentState.existingAttachments = (data.attachments || []).map(att => ({
+                            id: att.id,
+                            type: att.type,
+                            title: att.title,
+                            url: att.url,
+                            fileName: att.fileName,
+                            videoId: att.videoId,
+                            _removed: false
+                        }));
+                        if (assignmentIdField) assignmentIdField.value = data.id;
+                        if (assignmentTitleInput) assignmentTitleInput.value = data.title || '';
+                        if (assignmentDescription) assignmentDescription.value = data.description || '';
+                        if (assignmentPublishInput) assignmentPublishInput.value = '';
+                        if (assignmentDueInput) assignmentDueInput.value = data.dueDate || '';
+                        if (assignmentSaveBtn) {
+                            assignmentSaveBtn.textContent = 'Lưu';
+                            assignmentSaveBtn.disabled = !assignmentTitleInput?.value.trim();
+                        }
+                        renderAssignmentAttachments();
+                        assignmentModal.style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
+                        assignmentTitleInput?.focus();
+                    })
+                    .catch(() => showErrorModal('Không thể tải dữ liệu bài tập.'));
+            };
+        })();
+
+        // Modal xác nhận xóa assignment
+        const deleteAssignmentConfirmModal = document.getElementById('deleteAssignmentConfirmModal');
+        const deleteAssignmentConfirmMessage = document.getElementById('deleteAssignmentConfirmMessage');
+        const confirmDeleteAssignmentBtn = document.getElementById('confirmDeleteAssignmentConfirm');
+        const cancelDeleteAssignmentBtn = document.getElementById('cancelDeleteAssignmentConfirm');
+        const closeDeleteAssignmentModalBtn = document.getElementById('closeDeleteAssignmentConfirmModal');
+        
+        let pendingDeleteAssignmentForm = null;
+        
+        function openDeleteAssignmentConfirmModal(message, form) {
+            if (!deleteAssignmentConfirmModal || !deleteAssignmentConfirmMessage) {
+                // Fallback nếu không tìm thấy modal
+                console.warn('Delete assignment modal not found, using confirm dialog');
+                if (confirm(message)) {
+                    if (form) {
+                        form.submit();
+                    } else {
+                        console.error('Form is null, cannot submit');
+                        alert('Không thể xóa bài tập. Vui lòng thử lại.');
+                    }
+                }
+                return;
+            }
+            
+            if (!form) {
+                console.error('Form is null in openDeleteAssignmentConfirmModal');
+                alert('Không tìm thấy form xóa bài tập. Vui lòng tải lại trang.');
+                return;
+            }
+            
+            pendingDeleteAssignmentForm = form;
+            deleteAssignmentConfirmMessage.textContent = message;
+            deleteAssignmentConfirmModal.style.display = 'flex';
+        }
+        
+        function closeDeleteAssignmentConfirmModal() {
+            if (deleteAssignmentConfirmModal) {
+                deleteAssignmentConfirmModal.style.display = 'none';
+            }
+            pendingDeleteAssignmentForm = null;
+        }
+        
+        if (confirmDeleteAssignmentBtn) {
+            confirmDeleteAssignmentBtn.addEventListener('click', function() {
+                // Lưu form vào biến local trước khi kiểm tra
+                const formToSubmit = pendingDeleteAssignmentForm;
+                
+                if (!formToSubmit) {
+                    console.error('Pending delete form is null');
+                    alert('Không tìm thấy form xóa bài tập. Vui lòng thử lại.');
+                    closeDeleteAssignmentConfirmModal();
+                    return;
+                }
+                
+                try {
+                    // Kiểm tra form có tồn tại trong DOM không
+                    if (!document.body.contains(formToSubmit)) {
+                        console.error('Form is not in DOM');
+                        alert('Form xóa bài tập không còn trong trang. Vui lòng tải lại trang.');
+                        closeDeleteAssignmentConfirmModal();
+                        return;
+                    }
+                    
+                    // Kiểm tra CSRF token
+                    const tokenInput = formToSubmit.querySelector('input[name="__RequestVerificationToken"]');
+                    if (!tokenInput || !tokenInput.value) {
+                        console.error('CSRF token not found in form');
+                        alert('Token bảo mật không tìm thấy. Vui lòng tải lại trang.');
+                        closeDeleteAssignmentConfirmModal();
+                        return;
+                    }
+                    
+                    // Lấy assignment ID
+                    const assignmentIdInput = formToSubmit.querySelector('input[name="id"]');
+                    if (!assignmentIdInput || !assignmentIdInput.value) {
+                        console.error('Assignment ID not found in form');
+                        alert('Không tìm thấy ID bài tập. Vui lòng tải lại trang.');
+                        closeDeleteAssignmentConfirmModal();
+                        return;
+                    }
+                    
+                    // Lưu các giá trị cần thiết trước khi đóng modal
+                    const formAction = formToSubmit.action;
+                    const tokenValue = tokenInput.value;
+                    const assignmentId = assignmentIdInput.value;
+                    
+                    console.log('Submitting delete assignment form...', {
+                        form: formToSubmit,
+                        formAction: formAction,
+                        assignmentId: assignmentId,
+                        hasToken: !!tokenValue
+                    });
+                    
+                    // Đóng modal trước khi submit (nhưng không set form thành null)
+                    if (deleteAssignmentConfirmModal) {
+                        deleteAssignmentConfirmModal.style.display = 'none';
+                    }
+                    
+                    // Thử submit form
+                    try {
+                        if (formToSubmit && formToSubmit.submit) {
+                            formToSubmit.submit();
+                        } else {
+                            throw new Error('Form submit method not available');
+                        }
+                    } catch (submitError) {
+                        console.error('Error calling form.submit():', submitError);
+                        // Fallback: tạo form mới và submit
+                        const newForm = document.createElement('form');
+                        newForm.method = 'POST';
+                        newForm.action = formAction;
+                        newForm.style.display = 'none';
+                        
+                        // Copy CSRF token
+                        const newTokenInput = document.createElement('input');
+                        newTokenInput.type = 'hidden';
+                        newTokenInput.name = '__RequestVerificationToken';
+                        newTokenInput.value = tokenValue;
+                        newForm.appendChild(newTokenInput);
+                        
+                        // Copy assignment ID
+                        const newIdInput = document.createElement('input');
+                        newIdInput.type = 'hidden';
+                        newIdInput.name = 'id';
+                        newIdInput.value = assignmentId;
+                        newForm.appendChild(newIdInput);
+                        
+                        document.body.appendChild(newForm);
+                        console.log('Created fallback form:', newForm);
+                        newForm.submit();
+                    }
+                    
+                    // Reset pending form sau khi đã submit
+                    pendingDeleteAssignmentForm = null;
+                } catch (error) {
+                    console.error('Error submitting delete form:', error);
+                    alert('Có lỗi xảy ra khi xóa bài tập. Vui lòng thử lại.');
+                    closeDeleteAssignmentConfirmModal();
+                }
+            });
+        }
+        
+        if (cancelDeleteAssignmentBtn) {
+            cancelDeleteAssignmentBtn.addEventListener('click', closeDeleteAssignmentConfirmModal);
+        }
+        
+        if (closeDeleteAssignmentModalBtn) {
+            closeDeleteAssignmentModalBtn.addEventListener('click', closeDeleteAssignmentConfirmModal);
+        }
+        
+        if (deleteAssignmentConfirmModal) {
+            deleteAssignmentConfirmModal.addEventListener('click', function(e) {
+                if (e.target === deleteAssignmentConfirmModal) {
+                    closeDeleteAssignmentConfirmModal();
+                }
+            });
+        }
+
+        // Hàm toggle menu xóa bình luận
+        function toggleCommentMenu(button, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            
+            if (!button) {
+                console.error('Button not found');
+                return;
+            }
+            
+            // Tìm dropdown menu - tìm trong cùng parent container
+            const parent = button.closest('.comment-menu');
+            if (!parent) {
+                console.error('Comment menu parent not found');
+                return;
+            }
+            
+            const dropdown = parent.querySelector('.comment-menu-dropdown');
+            if (!dropdown) {
+                console.error('Dropdown menu not found');
+                return;
+            }
+            
+            const isOpen = dropdown.style.display === 'block';
+            
+            // Đóng tất cả các menu khác
+            document.querySelectorAll('.comment-menu-dropdown').forEach(menu => {
+                if (menu !== dropdown) {
+                    menu.style.display = 'none';
+                }
+            });
+            
+            // Toggle menu hiện tại
+            dropdown.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // Đóng menu khi click bên ngoài
+        document.addEventListener('click', function(e) {
+            // Kiểm tra xem click có phải trong menu dropdown không
+            const clickedInDropdown = e.target.closest('.comment-menu-dropdown');
+            const clickedOnMenuBtn = e.target.closest('.comment-menu-btn');
+            const clickedOnDeleteBtn = e.target.closest('.comment-delete-btn');
+            const clickedOnEditBtn = e.target.closest('.comment-edit-btn');
+            
+            // Nếu click vào nút xóa hoặc chỉnh sửa, không đóng menu (để modal có thể mở)
+            if (clickedOnDeleteBtn || clickedOnEditBtn) {
+                return;
+            }
+            
+            // Nếu click vào menu button, không đóng menu (toggle sẽ xử lý)
+            if (clickedOnMenuBtn) {
+                return;
+            }
+            
+            // Chỉ đóng menu nếu click bên ngoài menu và dropdown
+            if (!clickedInDropdown) {
+                document.querySelectorAll('.comment-menu-dropdown').forEach(menu => {
+                    menu.style.display = 'none';
+                });
+            }
+        });
+
+        // Chỉnh sửa comment trực tiếp (inline)
+        let currentEditingCommentId = null;
+        let originalCommentContent = null;
+        
+        function openEditCommentModal(commentId, button, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            
+            // Hủy chỉnh sửa comment khác nếu đang chỉnh sửa
+            if (currentEditingCommentId && currentEditingCommentId !== commentId) {
+                cancelInlineEdit();
+            }
+            
+            // Đóng menu dropdown
+            let dropdown = button.closest('.comment-menu-dropdown');
+            if (!dropdown) {
+                const commentMenu = button.closest('.comment-menu');
+                if (commentMenu) {
+                    dropdown = commentMenu.querySelector('.comment-menu-dropdown');
+                }
+            }
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
+            
+            // Tìm comment item
+            const commentItem = button.closest('[data-comment-id]');
+            if (!commentItem) {
+                console.error('Comment item not found');
+                return;
+            }
+            
+            const commentTextElement = commentItem.querySelector('.comment-text');
+            if (!commentTextElement) {
+                console.error('Comment text element not found');
+                return;
+            }
+            
+            // Lấy nội dung gốc từ data attribute của button (đã được encode sẵn)
+            const encodedContent = button.getAttribute('data-comment-content') || '';
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = encodedContent.replace(/&#10;/g, '\n');
+            originalCommentContent = tempDiv.textContent || tempDiv.innerText || '';
+            
+            // Nếu không có trong data attribute, lấy từ DOM
+            if (!originalCommentContent) {
+                originalCommentContent = commentTextElement.textContent || commentTextElement.innerText || '';
+            }
+            
+            // Tạo textarea để chỉnh sửa
+            const textarea = document.createElement('textarea');
+            textarea.className = 'comment-edit-textarea';
+            textarea.style.width = '100%';
+            textarea.style.minHeight = '60px';
+            textarea.style.padding = '8px';
+            textarea.style.border = '1px solid #1976d2';
+            textarea.style.borderRadius = '4px';
+            textarea.style.fontSize = '0.875rem';
+            textarea.style.fontFamily = 'inherit';
+            textarea.style.resize = 'vertical';
+            textarea.value = originalCommentContent;
+            
+            // Tạo các nút hành động
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'comment-edit-actions';
+            actionsDiv.style.display = 'flex';
+            actionsDiv.style.gap = '8px';
+            actionsDiv.style.marginTop = '8px';
+            actionsDiv.style.justifyContent = 'flex-end';
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'comment-edit-cancel-btn';
+            cancelBtn.textContent = 'Huỷ';
+            cancelBtn.style.padding = '6px 16px';
+            cancelBtn.style.border = '1px solid #dadce0';
+            cancelBtn.style.borderRadius = '4px';
+            cancelBtn.style.background = 'white';
+            cancelBtn.style.color = '#5f6368';
+            cancelBtn.style.cursor = 'pointer';
+            cancelBtn.style.fontSize = '0.875rem';
+            cancelBtn.onclick = () => cancelInlineEdit();
+            
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.className = 'comment-edit-save-btn';
+            saveBtn.textContent = 'Lưu';
+            saveBtn.style.padding = '6px 16px';
+            saveBtn.style.border = 'none';
+            saveBtn.style.borderRadius = '4px';
+            saveBtn.style.background = '#1976d2';
+            saveBtn.style.color = 'white';
+            saveBtn.style.cursor = 'pointer';
+            saveBtn.style.fontSize = '0.875rem';
+            saveBtn.onclick = () => saveInlineEdit(commentId);
+            
+            actionsDiv.appendChild(cancelBtn);
+            actionsDiv.appendChild(saveBtn);
+            
+            // Thay thế comment text bằng textarea
+            commentTextElement.style.display = 'none';
+            commentTextElement.parentNode.insertBefore(textarea, commentTextElement.nextSibling);
+            commentTextElement.parentNode.insertBefore(actionsDiv, textarea.nextSibling);
+            
+            currentEditingCommentId = commentId;
+            
+            // Ẩn menu chỉnh sửa khi đang chỉnh sửa
+            const editBtn = commentItem.querySelector('.comment-edit-btn');
+            if (editBtn) {
+                editBtn.style.display = 'none';
+            }
+            
+            // Focus vào textarea
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            }, 50);
+        }
+        
+        function cancelInlineEdit() {
+            if (!currentEditingCommentId) return;
+            
+            const commentItem = document.querySelector(`[data-comment-id="${currentEditingCommentId}"]`);
+            if (!commentItem) {
+                currentEditingCommentId = null;
+                originalCommentContent = null;
+                return;
+            }
+            
+            // Xóa textarea và actions
+            const textarea = commentItem.querySelector('.comment-edit-textarea');
+            const actionsDiv = commentItem.querySelector('.comment-edit-actions');
+            
+            if (textarea) textarea.remove();
+            if (actionsDiv) actionsDiv.remove();
+            
+            // Hiển thị lại comment text (không cần restore vì chưa thay đổi)
+            const commentTextElement = commentItem.querySelector('.comment-text');
+            if (commentTextElement) {
+                commentTextElement.style.display = '';
+            }
+            
+            // Hiển thị lại nút chỉnh sửa
+            const editBtn = commentItem.querySelector('.comment-edit-btn');
+            if (editBtn) {
+                editBtn.style.display = 'block';
+            }
+            
+            currentEditingCommentId = null;
+            originalCommentContent = null;
+        }
+        
+        async function saveInlineEdit(commentId) {
+            if (!commentId) return;
+            
+            const commentItem = document.querySelector(`[data-comment-id="${commentId}"]`);
+            if (!commentItem) {
+                showErrorModal('Không tìm thấy bình luận để cập nhật.');
+                return;
+            }
+            
+            const textarea = commentItem.querySelector('.comment-edit-textarea');
+            if (!textarea) {
+                cancelInlineEdit();
+                return;
+            }
+            
+            const newContent = textarea.value.trim();
+            if (!newContent) {
+                showErrorModal('Nội dung nhận xét không được để trống.');
+                return;
+            }
+            
+            try {
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenInput ? tokenInput.value : '';
+                
+                if (!token) {
+                    showErrorModal('Không tìm thấy token bảo mật. Vui lòng tải lại trang.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('id', commentId);
+                formData.append('content', newContent);
+                formData.append('__RequestVerificationToken', token);
+                
+                // Disable buttons while saving
+                const saveBtn = commentItem.querySelector('.comment-edit-save-btn');
+                const cancelBtn = commentItem.querySelector('.comment-edit-cancel-btn');
+                if (saveBtn) saveBtn.disabled = true;
+                if (cancelBtn) cancelBtn.disabled = true;
+                
+                const response = await fetch('@Url.Action("Update", "Comments")', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    showErrorModal('Không thể kết nối đến server. Vui lòng thử lại.');
+                    if (saveBtn) saveBtn.disabled = false;
+                    if (cancelBtn) cancelBtn.disabled = false;
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Xóa textarea và actions
+                    if (textarea) textarea.remove();
+                    const actionsDiv = commentItem.querySelector('.comment-edit-actions');
+                    if (actionsDiv) actionsDiv.remove();
+                    
+                    // Cập nhật nội dung comment
+                    const commentTextElement = commentItem.querySelector('.comment-text');
+                    if (commentTextElement) {
+                        // Giữ nguyên định dạng xuống dòng
+                        const formattedContent = result.content.replace(/\n/g, '<br>');
+                        commentTextElement.innerHTML = formattedContent;
+                        commentTextElement.style.display = '';
+                    }
+                    
+                    // Hiển thị lại nút chỉnh sửa và cập nhật data attribute
+                    const editBtn = commentItem.querySelector('.comment-edit-btn');
+                    if (editBtn) {
+                        editBtn.style.display = 'block';
+                        const tempTextarea = document.createElement('textarea');
+                        tempTextarea.textContent = result.content;
+                        editBtn.setAttribute('data-comment-content', tempTextarea.innerHTML.replace(/"/g, '&quot;').replace(/\n/g, '&#10;'));
+                    }
+                    
+                    currentEditingCommentId = null;
+                    originalCommentContent = null;
+                } else {
+                    showErrorModal(result.error || 'Có lỗi xảy ra khi cập nhật nhận xét.');
+                    if (saveBtn) saveBtn.disabled = false;
+                    if (cancelBtn) cancelBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error editing comment:', error);
+                showErrorModal('Có lỗi xảy ra khi cập nhật nhận xét. Vui lòng thử lại.');
+                const saveBtn = commentItem.querySelector('.comment-edit-save-btn');
+                const cancelBtn = commentItem.querySelector('.comment-edit-cancel-btn');
+                if (saveBtn) saveBtn.disabled = false;
+                if (cancelBtn) cancelBtn.disabled = false;
+            }
+        }
+        
+        // Hủy chỉnh sửa khi nhấn ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && currentEditingCommentId) {
+                cancelInlineEdit();
+            }
+        });
+
+        // Modal xác nhận xóa comment
+        let pendingDeleteCommentId = null;
+        let pendingDeleteCommentButton = null;
+        
+        const deleteCommentModal = document.getElementById('deleteCommentModal');
+        const closeDeleteCommentModalBtn = document.getElementById('closeDeleteCommentModal');
+        const cancelDeleteCommentBtn = document.getElementById('cancelDeleteComment');
+        const confirmDeleteCommentBtn = document.getElementById('confirmDeleteComment');
+        
+        function openDeleteCommentConfirmModal(commentId, button) {
+            pendingDeleteCommentId = commentId;
+            pendingDeleteCommentButton = button;
+            
+            // Đóng menu xóa - button có thể là button xóa trong dropdown
+            let dropdown = button.closest('.comment-menu-dropdown');
+            if (!dropdown) {
+                // Nếu không tìm thấy, tìm trong comment-menu
+                const commentMenu = button.closest('.comment-menu');
+                if (commentMenu) {
+                    dropdown = commentMenu.querySelector('.comment-menu-dropdown');
+                }
+            }
+            if (dropdown) {
+                dropdown.style.display = 'none';
+            }
+            
+            // Tìm lại modal element để đảm bảo nó tồn tại (tìm lại mỗi lần để tránh lỗi)
+            const modal = document.getElementById('deleteCommentModal');
+            if (!modal) {
+                console.error('Delete comment modal not found. Modal element may not exist in DOM.');
+                alert('Không thể hiển thị modal xác nhận. Vui lòng tải lại trang.');
+                return;
+            }
+            
+            // Hiển thị modal
+            modal.style.display = 'flex';
+        }
+        
+        function closeDeleteCommentConfirmModal() {
+            if (deleteCommentModal) {
+                deleteCommentModal.style.display = 'none';
+            }
+            pendingDeleteCommentId = null;
+            pendingDeleteCommentButton = null;
+        }
+        
+        // Event listeners cho modal xác nhận xóa comment
+        if (confirmDeleteCommentBtn) {
+            confirmDeleteCommentBtn.addEventListener('click', performDeleteComment);
+        }
+        
+        if (cancelDeleteCommentBtn) {
+            cancelDeleteCommentBtn.addEventListener('click', closeDeleteCommentConfirmModal);
+        }
+        
+        if (closeDeleteCommentModalBtn) {
+            closeDeleteCommentModalBtn.addEventListener('click', closeDeleteCommentConfirmModal);
+        }
+        
+        if (deleteCommentModal) {
+            deleteCommentModal.addEventListener('click', function(e) {
+                if (e.target === deleteCommentModal) {
+                    closeDeleteCommentConfirmModal();
+                }
+            });
+        }
+        
+        // Hàm xóa bình luận riêng tư
+        async function deletePrivateComment(commentId, button, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            
+            openDeleteCommentConfirmModal(commentId, button);
+        }
+        
+        async function performDeleteComment() {
+            if (!pendingDeleteCommentId || !pendingDeleteCommentButton) {
+                showErrorModal('Không thể xác định bình luận cần xóa.');
+                closeDeleteCommentConfirmModal();
+                return;
+            }
+
+            // Kiểm tra comment ID hợp lệ
+            const commentId = parseInt(pendingDeleteCommentId);
+            if (isNaN(commentId) || commentId <= 0) {
+                showErrorModal('ID bình luận không hợp lệ.');
+                closeDeleteCommentConfirmModal();
+                return;
+            }
+
+            // Tìm phần tử bình luận để xóa
+            const commentItem = pendingDeleteCommentButton.closest('[data-comment-id]');
+            if (!commentItem) {
+                showErrorModal('Không tìm thấy bình luận để xóa.');
+                closeDeleteCommentConfirmModal();
+                return;
+            }
+
+            // Đóng modal xác nhận
+            closeDeleteCommentConfirmModal();
+
+            try {
+                // Lấy CSRF token từ form hoặc meta tag
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenInput ? tokenInput.value : '';
+                
+                if (!token) {
+                    showErrorModal('Không tìm thấy token bảo mật. Vui lòng tải lại trang.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('id', commentId);
+                formData.append('__RequestVerificationToken', token);
+
+                const response = await fetch('@Url.Action("Delete", "Comments")', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // Kiểm tra response status
+                if (!response.ok) {
+                    showErrorModal('Không thể kết nối đến server. Vui lòng thử lại.');
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (!result) {
+                    showErrorModal('Không nhận được phản hồi từ server.');
+                    return;
+                }
+
+                if (result.success) {
+                    // Xóa bình luận với hiệu ứng fade out
+                    commentItem.style.transition = 'opacity 0.3s';
+                    commentItem.style.opacity = '0';
+                    setTimeout(() => {
+                        commentItem.remove();
+                        
+                        // Kiểm tra nếu không còn bình luận nào, hiển thị thông báo
+                        const commentsList = commentItem.closest('.comments-list');
+                        if (commentsList) {
+                            const remainingComments = commentsList.querySelectorAll('[data-comment-id]');
+                            if (remainingComments.length === 0) {
+                                // Xóa thông báo empty cũ nếu có
+                                const oldEmpty = commentsList.querySelector('.comments-empty');
+                                if (oldEmpty) {
+                                    oldEmpty.remove();
+                                }
+                                
+                                // Xác định loại comment section để hiển thị thông báo phù hợp
+                                const commentsSection = commentsList.closest('.assignment-comments-section, .private-comments-section');
+                                let emptyText = 'Chưa có nhận xét nào.';
+                                if (commentsSection) {
+                                    const header = commentsSection.querySelector('.comments-header span');
+                                    if (header && header.textContent.includes('riêng tư')) {
+                                        emptyText = 'Chưa có nhận xét riêng tư nào.';
+                                    } else {
+                                        emptyText = 'Chưa có nhận xét nào.';
+                                    }
+                                }
+                                
+                                // Thêm thông báo empty mới
+                                const emptyMessage = document.createElement('div');
+                                emptyMessage.className = 'comments-empty';
+                                emptyMessage.textContent = emptyText;
+                                commentsList.appendChild(emptyMessage);
+                            }
+                        }
+                    }, 300);
+                } else {
+                    // Hiển thị lỗi bằng modal thay vì alert
+                    showErrorModal(result.error || 'Có lỗi xảy ra khi xóa bình luận.');
+                }
+            } catch (error) {
+                console.error('Error deleting comment:', error);
+                showErrorModal('Có lỗi xảy ra khi xóa bình luận. Vui lòng thử lại.');
+            }
+        }
+    </script>
+}

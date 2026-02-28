@@ -1,0 +1,3216 @@
+@model FinalASB.Models.Class
+@using System.Security.Claims
+@{
+    ViewData["Title"] = Model.ClassName;
+    Layout = "_ClassesLayout";
+    var userRole = ViewBag.UserRole as string ?? "Student";
+    var isOwner = ViewBag.IsOwner as bool? ?? false;
+    var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    
+    var now = DateTime.Now;
+    var isTeacherRole = userRole == "Teacher";
+    var visibleAssignments = Model.Assignments
+        .Where(a => isTeacherRole || !a.PublishAt.HasValue || a.PublishAt.Value <= now)
+        .ToList();
+    
+    // Get upcoming assignments (due within 7 days)
+    var upcomingAssignments = visibleAssignments
+        .Where(a => a.DueDate.HasValue && a.DueDate.Value >= now && a.DueDate.Value <= now.AddDays(7))
+        .OrderBy(a => a.DueDate)
+        .ToList();
+    
+    // Combine announcements and assignments, ordered by date
+    var allPosts = new List<object>();
+    foreach (var ann in Model.Announcements.OrderByDescending(a => a.CreatedAt))
+    {
+        allPosts.Add(new { Type = "Announcement", Item = ann, Date = ann.CreatedAt });
+    }
+    foreach (var ass in visibleAssignments.OrderByDescending(a => a.PublishAt ?? a.CreatedAt))
+    {
+        allPosts.Add(new { Type = "Assignment", Item = ass, Date = ass.PublishAt ?? ass.CreatedAt });
+    }
+    allPosts = allPosts.OrderByDescending(p => p.GetType().GetProperty("Date")?.GetValue(p) as DateTime?).ToList();
+
+    var teacherEnrollments = Model.Enrollments
+        .Where(e => e.Role == "Teacher")
+        .OrderBy(e => e.User.FullName)
+        .ToList();
+    var studentEnrollments = Model.Enrollments
+        .Where(e => e.Role != "Teacher")
+        .OrderBy(e => e.User.FullName)
+        .ToList();
+    var studentIds = studentEnrollments.Select(e => e.UserId).ToList();
+
+    var classComments = Model.Comments?.ToList() ?? new List<FinalASB.Models.Comment>();
+
+    var classTabs = new List<dynamic>
+    {
+        new { Key = "feed", Label = "Bảng tin", Visible = true, Active = true },
+        new { Key = "work", Label = "Bài tập", Visible = true, Active = false },
+        new { Key = "people", Label = "Mọi người", Visible = true, Active = false }
+    };
+
+    if (userRole == "Teacher")
+    {
+        classTabs.Add(new { Key = "grades", Label = "Điểm số", Visible = true, Active = false });
+    }
+
+    ViewBag.ClassTabs = classTabs;
+}
+
+<!-- Class Banner -->
+<div class="class-details-banner">
+    @if (!string.IsNullOrEmpty(Model.ClassImageUrl))
+    {
+        <img src="@Model.ClassImageUrl" alt="@Model.ClassName" class="banner-background-image" />
+    }
+    <div class="banner-overlay-content">
+        <div class="banner-text-content">
+            <h1 class="banner-class-name">@Model.ClassName</h1>
+            <p class="banner-class-description">@(Model.Description ?? "Lớp học")</p>
+        </div>
+        @if (isOwner)
+        {
+            <div class="banner-actions">
+                <form id="updateClassImageForm" asp-action="UpdateImage" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="file" id="classImageInput" name="ClassImageFile" accept="image/*" style="display:none;" />
+                    <button type="button" class="banner-customize-btn" id="triggerImageUpload">
+                        <i class="fas fa-pencil-alt me-1"></i>Chọn ảnh lớp
+                </button>
+                </form>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="class-tab-panels">
+    <div class="class-tab-panel active" data-tab-panel="feed">
+<div class="class-details-container">
+    <div class="class-details-content-wrapper">
+        <!-- Left Sidebar -->
+        <div class="class-details-sidebar">
+            <!-- Class Code -->
+            <div class="class-details-sidebar-card">
+                <div class="class-code-section">
+                    <div class="class-code-header">
+                        <span class="class-code-label">Mã lớp</span>
+                        <button type="button" class="class-code-copy-btn" onclick="copyClassCode('@Model.JoinCode')" title="Copy mã lớp">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="class-code-value">@Model.JoinCode</div>
+                </div>
+            </div>
+
+            <!-- Upcoming Deadlines -->
+            <div class="class-details-sidebar-card">
+            <div class="upcoming-deadlines-section">
+                <h4 class="upcoming-deadlines-title">Sắp đến hạn</h4>
+                @if (!upcomingAssignments.Any())
+                {
+                    <p class="upcoming-deadlines-empty">Không có bài tập nào sắp đến hạn</p>
+                }
+                else
+                {
+                    <div class="upcoming-deadlines-list">
+                        @foreach (var assignment in upcomingAssignments.Take(3))
+                        {
+                            <div class="upcoming-deadline-item">
+                                <a href="@Url.Action("Details", "Assignments", new { id = assignment.Id })" class="upcoming-deadline-link">
+                                    <div class="upcoming-deadline-title">@assignment.Title</div>
+                                    <div class="upcoming-deadline-date">
+                                        <i class="fas fa-clock me-1"></i>@assignment.DueDate.Value.ToString("dd/MM/yyyy HH:mm")
+                                    </div>
+                                </a>
+                            </div>
+                        }
+                    </div>
+
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="class-details-main-content">
+                    @if (userRole == "Teacher")
+                    {
+                        <button type="button" class="reuse-post-btn" id="openAnnouncementModal" style="color: cornflowerblue;">
+                            <i class="fas fa-pencil-alt me-1"></i>
+                            Đăng thông báo
+                        </button>
+                    }
+
+                <div id="postsList">
+                    @if (!allPosts.Any())
+                    {
+                        <div class="card">
+                            <div class="card-body text-center py-5 text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>Chưa có bài đăng nào</p>
+                            </div>
+                        </div>
+
+                    }
+                    else
+                    {
+                        @foreach (var post in allPosts)
+                        {
+                            var type = post.GetType().GetProperty("Type")?.GetValue(post)?.ToString();
+                            var item = post.GetType().GetProperty("Item")?.GetValue(post);
+                            var date = (DateTime?)post.GetType().GetProperty("Date")?.GetValue(post);
+
+                            var announcementItem = type == "Announcement" ? item as FinalASB.Models.Announcement : null;
+                            var assignmentItem = type == "Assignment" ? item as FinalASB.Models.Assignment : null;
+                            var cardClasses = "class-details-post-card";
+                            if (type == "Assignment")
+                            {
+                                cardClasses += " class-details-post-card--assignment";
+                            }
+                            <div class="@cardClasses"
+                                 @if (assignmentItem != null)
+                                 {
+                                     <text>data-assignment-id="@assignmentItem.Id" data-assignment-url="@Url.Action("Details", "Assignments", new { id = assignmentItem.Id })"</text>
+                                 }
+                                 @if (announcementItem != null)
+                                 {
+                                     <text> data-announcement-id="@announcementItem.Id"</text>
+                                 }>
+                                <div class="post-icon">
+                                    @if (type == "Announcement")
+                                    {
+                                        <i class="fas fa-file-alt"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-clipboard-list"></i>
+                                    }
+                                </div>
+                                <div class="post-content">
+                                    @if (type == "Announcement")
+                                    {
+                                        var ann = announcementItem;
+
+                                            var announcementComments = classComments.Where(c => c.AnnouncementId == ann.Id && !c.IsPrivate).ToList();
+                                        <div class="post-text">
+                                            <strong>@ann.User.FullName</strong> đã đăng một @(type == "Announcement" ? "tài liệu" : "bài tập") mới: <strong>@ann.Content</strong>
+                                        </div>
+                                        @if (ann.Attachments != null && ann.Attachments.Any())
+                                        {
+                                            <div class="post-attachments">
+                                                @foreach (var attachment in ann.Attachments)
+                                                {
+                                                    @if (attachment.Type == "YouTube")
+                                                    {
+                                                        <div class="post-attachment-card youtube-card">
+                                                            <div class="attachment-info">
+                                                                <div class="attachment-title">@(!string.IsNullOrEmpty(attachment.Title) ? attachment.Title : "YouTube")</div>
+                                                                <div class="attachment-subtitle">@attachment.Url</div>
+                                                            </div>
+                                                            <div class="attachment-thumbnail">
+                                                                @if (!string.IsNullOrEmpty(attachment.VideoId))
+                                                                {
+                                                                    <img src="https://img.youtube.com/vi/@attachment.VideoId/mqdefault.jpg" alt="YouTube thumbnail" />
+                                                                }
+                                                                else
+                                                                {
+                                                                    <i class="fab fa-youtube"></i>
+                                                                }
+                                                            </div>
+                                                            <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                        </div>
+                                                    }
+                                                    else if (attachment.Type == "Link")
+                                                    {
+                                                        <div class="post-attachment-card link-card">
+                                                            <div class="attachment-info">
+                                                                <div class="attachment-title">@attachment.Title</div>
+                                                                <div class="attachment-subtitle">@attachment.Url</div>
+                                                            </div>
+                                                            <div class="attachment-icon">
+                                                                <i class="fas fa-link"></i>
+                                                            </div>
+                                                            <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                        </div>
+                                                    }
+                                                    else if (attachment.Type == "File")
+                                                    {
+                                                        <div class="post-attachment-card file-card">
+                                                            <div class="attachment-info">
+                                                                <div class="attachment-title">@attachment.FileName</div>
+                                                                <div class="attachment-subtitle">Tệp đính kèm</div>
+                                                            </div>
+                                                            <div class="attachment-icon">
+                                                                <i class="fas fa-file"></i>
+                                                            </div>
+                                                            @if (!string.IsNullOrEmpty(attachment.Url))
+                                                            {
+                                                                <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                            }
+                                                        </div>
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                        <div class="post-date">
+                                            @date.Value.ToString("dd 'thg' MM")
+                                        </div>
+                                        <button type="button"
+                                                class="post-comments-trigger"
+                                                data-comments-trigger
+                                                data-type="announcement"
+                                                data-id="@ann.Id"
+                                                data-title="Nhận xét của lớp học">
+                                            <i class="fas fa-comment"></i>
+                                            <span data-comment-label>@(announcementComments.Any() ? $"{announcementComments.Count} nhận xét về lớp" : "Thêm nhận xét về lớp")</span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        var ass = item as FinalASB.Models.Assignment;
+                                        var isScheduledAssignment = ass!.PublishAt.HasValue && ass.PublishAt.Value > now;
+                                            var assignmentComments = classComments.Where(c => c.AssignmentId == ass.Id && !c.IsPrivate).ToList();
+                                        <div class="post-text">
+                                            <strong>@ass.Creator.FullName</strong> đã đăng một bài tập mới: 
+                                            <a href="@Url.Action("Details", "Assignments", new { id = ass.Id })" class="post-link">
+                                                <strong>@ass.Title</strong>
+                                            </a>
+                                            @if (isScheduledAssignment)
+                                            {
+                                                <span class="post-scheduled-badge">
+                                                    <i class="fas fa-clock me-1"></i>Hẹn đăng
+                                                </span>
+                                            }
+                                        </div>
+                                    <div class="post-date">
+                                        @if (isScheduledAssignment && ass.PublishAt.HasValue)
+                                        {
+                                            <span>Sẽ đăng lúc @ass.PublishAt.Value.ToString("HH:mm dd 'thg' MM")</span>
+                                        }
+                                        else
+                                        {
+                                            @date.Value.ToString("dd 'thg' MM")
+                                        }
+                                    </div>
+                                        <button type="button"
+                                                class="post-comments-trigger"
+                                                data-comments-trigger
+                                                data-type="assignment"
+                                                data-id="@ass.Id"
+                                                data-title="Nhận xét của lớp học">
+                                            <i class="fas fa-comment"></i>
+                                            <span data-comment-label>@(assignmentComments.Any() ? $"{assignmentComments.Count} nhận xét về lớp" : "Thêm nhận xét về lớp")</span>
+                                        </button>
+                                    }
+                                </div>
+                                @if (userRole == "Teacher" && type == "Announcement" && announcementItem != null)
+                                {
+                                    <div class="post-menu">
+                                        <button type="button" class="post-menu-btn" data-post-menu-toggle>
+                                            <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                                        <div class="post-menu-dropdown">
+                                            <button type="button" class="post-menu-item" data-menu-action="edit" data-entity="announcement" data-id="@announcementItem.Id">Chỉnh sửa</button>
+                                            <button type="button" class="post-menu-item danger" data-menu-action="delete" data-entity="announcement" data-id="@announcementItem.Id">Xoá</button>
+                                        </div>
+                                    </div>
+                                }
+                                @if (userRole == "Teacher" && type == "Assignment" && assignmentItem != null)
+                                {
+                                    <div class="post-menu">
+                                        <button type="button" class="post-menu-btn" data-post-menu-toggle>
+                                            <i class="fas fa-ellipsis-h"></i>
+                                        </button>
+                                        <div class="post-menu-dropdown">
+                                            <button type="button" class="post-menu-item" data-menu-action="edit" data-entity="assignment" data-id="@assignmentItem.Id">Chỉnh sửa</button>
+                                            <button type="button" class="post-menu-item danger" data-menu-action="delete" data-entity="assignment" data-id="@assignmentItem.Id">Xoá</button>
+                                        </div>
+                                    </div>
+                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                </div>
+            </div>
+                </div>
+            </div>
+
+    <div class="class-tab-panel" data-tab-panel="work">
+        <div class="class-panel-card class-work-panel">
+            <div class="panel-header">
+                <div class="panel-header-text">
+                    <h3>Bài tập trên lớp</h3>
+                    <p>Danh sách tất cả bài tập và hạn nộp</p>
+                    </div>
+                @if (userRole == "Teacher")
+                {
+                    <div class="panel-header-actions">
+                        <button type="button" class="glassy-btn panel-action-btn" id="openAssignmentModal">
+                            <i class="fas fa-plus me-2"></i>Tạo bài tập
+                                </button>
+                            </div>
+                        }
+            </div>
+            @if (!visibleAssignments.Any())
+            {
+                <div class="empty-panel-state">
+                    <i class="fas fa-list-alt"></i>
+                    <p>Chưa có bài tập nào trong lớp học.</p>
+        </div>
+            }
+            else
+            {
+                <div class="class-assignment-list">
+                    @foreach (var assignment in visibleAssignments.OrderByDescending(a => a.CreatedAt))
+                    {
+                        <div class="class-assignment-item">
+                            <div class="class-assignment-content">
+                                <h4>@assignment.Title</h4>
+                                @if (!string.IsNullOrWhiteSpace(assignment.Description))
+                                {
+                                    <p>@assignment.Description</p>
+                                }
+                                <div class="class-assignment-meta">
+                                    <span><i class="fas fa-user-pen me-1"></i>@assignment.Creator.FullName</span>
+                                    @if (assignment.DueDate.HasValue)
+                                    {
+                                        <span><i class="fas fa-clock me-1"></i>Hạn: @assignment.DueDate.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                    }
+    </div>
+                                @if (assignment.Attachments != null && assignment.Attachments.Any())
+                                {
+                                    <div class="class-assignment-attachments">
+                                        @foreach (var attachment in assignment.Attachments)
+                                        {
+                                            @if (attachment.Type == "YouTube")
+                                            {
+                                                <div class="post-attachment-card youtube-card">
+                                                    <div class="attachment-info">
+                                                        <div class="attachment-title">@attachment.Title</div>
+                                                        <div class="attachment-subtitle">@attachment.Url</div>
+                                                    </div>
+                                                    <div class="attachment-thumbnail">
+                                                        @if (!string.IsNullOrEmpty(attachment.VideoId))
+                                                        {
+                                                            <img src="https://img.youtube.com/vi/@attachment.VideoId/mqdefault.jpg" alt="YouTube thumbnail" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="fab fa-youtube"></i>
+                                                        }
+                                                    </div>
+                                                    <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                </div>
+                                            }
+                                            else if (attachment.Type == "Link")
+                                            {
+                                                <div class="post-attachment-card link-card">
+                                                    <div class="attachment-info">
+                                                        <div class="attachment-title">@attachment.Title</div>
+                                                        <div class="attachment-subtitle">@attachment.Url</div>
+                                                    </div>
+                                                    <div class="attachment-icon">
+                                                        <i class="fas fa-link"></i>
+                                                    </div>
+                                                    <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                </div>
+                                            }
+                                            else if (attachment.Type == "File")
+                                            {
+                                                <div class="post-attachment-card file-card">
+                                                    <div class="attachment-info">
+                                                        <div class="attachment-title">@attachment.FileName</div>
+                                                        <div class="attachment-subtitle">Tệp đính kèm</div>
+                                                    </div>
+                                                    <div class="attachment-icon">
+                                                        <i class="fas fa-file"></i>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(attachment.Url))
+                                                    {
+                                                        <a href="@attachment.Url" target="_blank" class="attachment-link"></a>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <a class="glassy-btn glassy-btn-outline class-assignment-view-btn" href="@Url.Action("Details","Assignments", new { id = assignment.Id })">Xem</a>
+                        </div>
+                    }
+                </div>
+                    }
+                </div>
+            </div>
+
+    <div class="class-tab-panel" data-tab-panel="people">
+        <div class="class-panel-card">
+            <div class="panel-header">
+                <div>
+                    <h3>Thành viên lớp học</h3>
+                    <p>Danh sách giáo viên và học sinh tham gia lớp</p>
+                    </div>
+                </div>
+            <div class="class-people-group">
+                <h4>Giáo viên</h4>
+                @if (!teacherEnrollments.Any())
+                {
+                    <p class="text-muted">Chưa có giáo viên nào.</p>
+                }
+                else
+                {
+                    <ul class="class-people-list">
+                        @foreach (var teacher in teacherEnrollments)
+                        {
+                            <li>
+                                <div class="people-avatar">
+                                    @if (!string.IsNullOrEmpty(teacher.User.AvatarUrl))
+                                    {
+                                        <img src="@teacher.User.AvatarUrl" alt="@teacher.User.FullName" />
+                                    }
+                                    else
+                                    {
+                                        @teacher.User.FullName.First()
+                                    }
+                                </div>
+                                <div>
+                                    <strong>@teacher.User.FullName</strong>
+                                    <span class="people-role">Giáo viên</span>
+            </div>
+                            </li>
+                        }
+                    </ul>
+                }
+        </div>
+            <div class="class-people-group">
+                <h4>Học sinh</h4>
+                @if (!studentEnrollments.Any())
+                {
+                    <p class="text-muted">Chưa có học sinh nào.</p>
+                }
+                else
+                {
+                    <ul class="class-people-list two-column">
+                        @foreach (var student in studentEnrollments)
+                        {
+                            <li>
+                                <div class="people-avatar">
+                                    @if (!string.IsNullOrEmpty(student.User.AvatarUrl))
+                                    {
+                                        <img src="@student.User.AvatarUrl" alt="@student.User.FullName" />
+                                    }
+                                    else
+                                    {
+                                        @student.User.FullName.First()
+                                    }
+                                </div>
+                                <div>
+                                    <strong>@student.User.FullName</strong>
+                                    <span class="people-role">Học sinh</span>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+    </div>
+    </div>
+</div>
+
+    @if (userRole == "Teacher")
+    {
+        <div class="class-tab-panel" data-tab-panel="grades">
+            <div class="class-panel-card">
+                <div class="panel-header">
+                    <div>
+                        <h3>Điểm số</h3>
+                        <p>Bảng điểm của từng học sinh trong mỗi bài tập</p>
+                    </div>
+                </div>
+                @{
+                    var allAssignments = visibleAssignments.OrderByDescending(a => a.CreatedAt).ToList();
+                }
+                @if (!allAssignments.Any() || !studentEnrollments.Any())
+                {
+                    <div class="empty-panel-state">
+                        <i class="fas fa-table"></i>
+                        <p>Chưa có bài tập hoặc học sinh nào trong lớp.</p>
+                    </div>
+                }
+                else
+                {
+                    <div style="overflow-x: auto; margin-top: 1rem;">
+                        <table class="grades-table" style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                            <thead>
+                                <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                                    <th style="padding: 1rem; text-align: left; font-weight: 600; color: #333; position: sticky; left: 0; background: #f5f5f5; z-index: 10; min-width: 150px;">
+                                        Học sinh
+                                    </th>
+                                    @foreach (var assignment in allAssignments)
+                                    {
+                                        <th style="padding: 1rem; text-align: center; font-weight: 600; color: #333; min-width: 120px;">
+                                            <a href="#" 
+                                               class="class-assignment-link" 
+                                               data-assignment-id="@assignment.Id" 
+                                               style="color: #1976d2; text-decoration: none; cursor: pointer; display: block; padding: 0.5rem; border-radius: 4px; transition: background-color 0.2s ease;"
+                                               title="Nhấn để xem chi tiết">
+                                                <div style="font-weight: 600; margin-bottom: 0.25rem;">@assignment.Title</div>
+                                                @if (assignment.DueDate.HasValue)
+                                                {
+                                                    <div style="font-size: 0.85rem; color: #666; font-weight: normal;">
+                                                        Đến hạn: @assignment.DueDate.Value.ToString("dd/MM/yyyy")
+                                                    </div>
+                                                }
+                                            </a>
+                                        </th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var enrollment in studentEnrollments)
+                                {
+                                    var student = enrollment.User;
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td style="padding: 1rem; font-weight: 600; color: #333; position: sticky; left: 0; background: #fff; z-index: 5;">
+                                            @student.FullName
+                                        </td>
+                                        @foreach (var assignment in allAssignments)
+                                        {
+                                            // Tìm submission của học sinh này cho bài tập này
+                                            var submission = assignment.Submissions?.FirstOrDefault(s => s.StudentId == student.Id);
+                                            var score = submission?.Score;
+                                            var hasSubmission = submission != null;
+                                            
+                                            <td style="padding: 1rem; text-align: center;">
+                                                @if (hasSubmission)
+                                                {
+                                                    // Học sinh đã nộp bài
+                                                    if (score.HasValue)
+                                                    {
+                                                        <a href="#" 
+                                                           class="grade-score-link" 
+                                                           data-assignment-id="@assignment.Id"
+                                                           data-student-id="@student.Id"
+                                                           style="font-weight: 600; color: #1976d2; font-size: 1.1rem; text-decoration: none; cursor: pointer; display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; transition: background-color 0.2s ease;"
+                                                           title="Nhấn để xem chi tiết"
+                                                           onmouseover="this.style.backgroundColor='rgba(25, 118, 210, 0.1)'"
+                                                           onmouseout="this.style.backgroundColor='transparent'">
+                                                            @score.Value
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <a href="#" 
+                                                           class="grade-score-link" 
+                                                           data-assignment-id="@assignment.Id"
+                                                           data-student-id="@student.Id"
+                                                           style="color: #999; font-style: italic; text-decoration: none; cursor: pointer; display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; transition: background-color 0.2s ease;"
+                                                           title="Nhấn để xem chi tiết"
+                                                           onmouseover="this.style.backgroundColor='rgba(0, 0, 0, 0.05)'; this.style.color='#666'"
+                                                           onmouseout="this.style.backgroundColor='transparent'; this.style.color='#999'">
+                                                            Đã nộp
+                                                        </a>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    // Học sinh chưa nộp bài - kiểm tra có quá hạn không
+                                                    var isOverdue = assignment.DueDate.HasValue && now > assignment.DueDate.Value;
+                                                    
+                                                    if (isOverdue)
+                                                    {
+                                                        // Đã quá hạn nhưng chưa nộp
+                                                        <span style="color: #d32f2f; font-weight: 500;">Thiếu</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        // Chưa quá hạn, chưa nộp
+                                                        <span style="color: #666;">Chưa nộp</span>
+                                                    }
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Announcement Modal -->
+@if (userRole == "Teacher")
+{
+    <div class="announcement-modal" id="announcementModal">
+        <div class="announcement-modal-content">
+            <div class="announcement-modal-header">
+                <h3>Thông báo</h3>
+                <button type="button" class="announcement-modal-close" id="closeAnnouncementModal">
+                    <i class="fas fa-times"></i>
+                </button>
+                </div>
+            <form
+                id="announcementForm"
+                asp-controller="Announcements"
+                asp-action="Create"
+                method="post"
+                enctype="multipart/form-data"
+                data-create-url="@Url.Action("Create","Announcements")"
+                data-edit-url="@Url.Action("Edit","Announcements")"
+                data-fetch-url="@Url.Action("Get","Announcements")">
+                    @Html.AntiForgeryToken()
+                <input type="hidden" name="classId" value="@Model.Id" />
+                <input type="hidden" name="id" id="announcementIdField" value="" />
+                <input type="hidden" name="attachmentsJson" id="attachmentsJson" value="" />
+                <input type="hidden" name="removedAttachmentIds" id="removedAttachmentIds" value="" />
+                <div class="announcement-modal-body">
+
+                    <div class="announcement-content-section">
+                        <textarea 
+                            id="announcementContent" 
+                            name="content" 
+                            class="announcement-textarea" 
+                            placeholder="Thông báo nội dung nào đó cho lớp học của bạn"
+                            rows="8"></textarea>
+                        <input type="file" id="announcementFileInput" name="attachedFiles" multiple style="display: none;" />
+                        <input type="file" id="attachmentFileSelector" multiple style="display: none;" />
+                        </div>
+                    <div class="announcement-toolbar">
+                        <div class="announcement-format-toolbar">
+                            <button type="button" class="toolbar-btn" data-format="list" title="Bullet list">
+                                <i class="fas fa-list-ul"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" data-format="emoji" title="Emoji">
+                                <i class="far fa-smile"></i>
+                            </button>
+                    </div>
+                        <div class="announcement-attach-toolbar">
+                            <button type="button" class="toolbar-btn" id="youtubeBtn" title="YouTube">
+                                <i class="fab fa-youtube"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="uploadFileBtn" title="Upload file">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="linkBtn" title="Link">
+                                <i class="fas fa-link"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="attachedItems" class="announcement-attached-items" style="display: none;"></div>
+                </div>
+                <div class="announcement-modal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAnnouncement">Huỷ</button>
+                    <div class="announcement-btn-group">
+                        <button type="submit" class="announcement-btn-post" id="postAnnouncement" disabled>
+                            Đăng
+                        </button>
+                    </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    <!-- YouTube Link Modal -->
+    <div class="announcement-submodal" id="youtubeModal">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm video YouTube</h4>
+                <button type="button" class="announcement-modal-close" id="closeYoutubeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+    </div>
+            <div class="announcement-submodal-body">
+                <label class="announcement-label">URL YouTube</label>
+                <input type="text" id="youtubeUrl" class="announcement-input" placeholder="https://www.youtube.com/watch?v=..." />
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelYoutube">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addYoutube">Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link Modal -->
+    <div class="announcement-submodal" id="linkModal">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm liên kết</h4>
+                <button type="button" class="announcement-modal-close" id="closeLinkModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <div class="announcement-form-group">
+                    <label class="announcement-label">Văn bản hiển thị</label>
+                    <input type="text" id="linkText" class="announcement-input" placeholder="Văn bản liên kết" />
+                </div>
+                <div class="announcement-form-group">
+                    <label class="announcement-label">URL</label>
+                    <input type="text" id="linkUrl" class="announcement-input" placeholder="https://..." />
+                </div>
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelLink">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addLink">Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Message Modal -->
+    <div class="announcement-error-modal" id="errorModal">
+        <div class="announcement-error-modal-content">
+            <div class="announcement-error-modal-header">
+                <div class="announcement-error-icon">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <h4>Thông báo</h4>
+                <button type="button" class="announcement-modal-close" id="closeErrorModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-error-modal-body">
+                <p id="errorMessage"></p>
+            </div>
+            <div class="announcement-error-modal-footer">
+                <button type="button" class="announcement-btn-post" id="confirmError">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assignment Modal (global) -->
+    <div class="announcement-modal" id="assignmentModal" style="display: none;">
+        <div class="announcement-modal-content">
+            <div class="announcement-modal-header">
+                <h3>Tạo bài tập</h3>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="assignmentForm" asp-controller="Assignments" asp-action="Create" method="post" enctype="multipart/form-data"
+                data-create-url="@Url.Action("Create","Assignments")"
+                data-edit-url="@Url.Action("Edit","Assignments")"
+                data-fetch-url="@Url.Action("Get","Assignments")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ClassId" value="@Model.Id" />
+                <input type="hidden" name="Id" id="assignmentIdField" value="" />
+                <input type="hidden" name="attachmentsJson" id="assignmentAttachmentsJson" value="" />
+                <input type="hidden" name="removedAttachmentIds" id="assignmentRemovedAttachmentIds" value="" />
+                <div class="announcement-modal-body">
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentTitle">Tiêu đề</label>
+                        <input type="text" id="assignmentTitle" name="Title" class="announcement-input" placeholder="Nhập tiêu đề bài tập" />
+                    </div>
+                    <div class="announcement-content-section">
+                        <label class="announcement-label" for="assignmentDescription">Mô tả</label>
+                        <textarea
+                            id="assignmentDescription"
+                            name="Description"
+                            class="announcement-textarea"
+                            rows="6"
+                            placeholder="Hướng dẫn chi tiết cho học sinh"></textarea>
+                        <input type="file" id="assignmentFileInput" name="attachedFiles" multiple style="display:none;" />
+                        <input type="file" id="assignmentFileSelector" multiple style="display:none;" />
+                    </div>
+                    <div class="announcement-toolbar">
+                        <div class="announcement-format-toolbar">
+                            <button type="button" class="toolbar-btn" data-assignment-format="list" title="Bullet list">
+                                <i class="fas fa-list-ul"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" data-assignment-format="emoji" title="Emoji">
+                                <i class="far fa-smile"></i>
+                            </button>
+                        </div>
+                        <div class="announcement-attach-toolbar">
+                            <button type="button" class="toolbar-btn" id="assignmentYoutubeBtn" title="YouTube">
+                                <i class="fab fa-youtube"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="assignmentUploadFileBtn" title="Upload file">
+                                <i class="fas fa-upload"></i>
+                            </button>
+                            <button type="button" class="toolbar-btn" id="assignmentLinkBtn" title="Link">
+                                <i class="fas fa-link"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentPublishAt">Ngày hẹn đăng bài (tuỳ chọn)</label>
+                        <input type="datetime-local" id="assignmentPublishAt" name="PublishAt" class="announcement-input" />
+                        <small class="announcement-helper-text">Bỏ trống để đăng ngay.</small>
+                    </div>
+                    <div class="announcement-form-group">
+                        <label class="announcement-label" for="assignmentDueDate">Ngày hết hạn</label>
+                        <input type="datetime-local" id="assignmentDueDate" name="DueDate" class="announcement-input" />
+                    </div>
+                    <div id="assignmentAttachedItems" class="announcement-attached-items" style="display:none;"></div>
+                </div>
+                <div class="announcement-modal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentModal">Huỷ</button>
+                    <button type="submit" class="announcement-btn-post" id="saveAssignmentBtn" disabled>Tạo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assignment YouTube Modal -->
+    <div class="announcement-submodal" id="assignmentYoutubeModal" style="display: none;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm video YouTube</h4>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentYoutubeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <label class="announcement-label">URL YouTube</label>
+                <input type="text" id="assignmentYoutubeUrl" class="announcement-input" placeholder="https://www.youtube.com/watch?v=..." />
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentYoutube">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addAssignmentYoutube" disabled>Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assignment Link Modal -->
+    <div class="announcement-submodal" id="assignmentLinkModal" style="display: none;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Thêm liên kết</h4>
+                <button type="button" class="announcement-modal-close" id="closeAssignmentLinkModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <div class="announcement-form-group">
+                    <label class="announcement-label">Văn bản hiển thị</label>
+                    <input type="text" id="assignmentLinkText" class="announcement-input" placeholder="Văn bản liên kết" />
+                </div>
+                <div class="announcement-form-group">
+                    <label class="announcement-label">URL</label>
+                    <input type="text" id="assignmentLinkUrl" class="announcement-input" placeholder="https://..." />
+                </div>
+                <div class="announcement-submodal-footer">
+                    <button type="button" class="announcement-btn-cancel" id="cancelAssignmentLink">Huỷ</button>
+                    <button type="button" class="announcement-btn-post" id="addAssignmentLink" disabled>Thêm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assignment Delete Modal -->
+    <div class="announcement-submodal" id="deleteAssignmentModal" style="display: none;">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Xoá bài tập</h4>
+                <button type="button" class="announcement-modal-close" id="closeDeleteAssignmentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <p>Bạn có chắc chắn muốn xoá bài tập này không?</p>
+            </div>
+            <div class="announcement-submodal-footer">
+                <button type="button" class="announcement-btn-cancel" id="cancelDeleteAssignment">Huỷ</button>
+                <button type="button" class="announcement-btn-post danger" id="confirmDeleteAssignment">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <form id="deleteAssignmentForm" asp-controller="Assignments" asp-action="Delete" method="post" class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" id="deleteAssignmentId" />
+    </form>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="announcement-submodal" id="deleteAnnouncementModal">
+        <div class="announcement-submodal-content">
+            <div class="announcement-submodal-header">
+                <h4>Xoá thông báo</h4>
+                <button type="button" class="announcement-modal-close" id="closeDeleteModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="announcement-submodal-body">
+                <p>Bạn có chắc chắn muốn xoá thông báo này không?</p>
+            </div>
+            <div class="announcement-submodal-footer">
+                <button type="button" class="announcement-btn-cancel" id="cancelDeleteAnnouncement">Huỷ</button>
+                <button type="button" class="announcement-btn-post danger" id="confirmDeleteAnnouncement">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <form id="deleteAnnouncementForm" asp-controller="Announcements" asp-action="Delete" method="post" class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" id="deleteAnnouncementId" />
+    </form>
+}
+
+<!-- Comments Modal (visible for all roles) -->
+<div class="class-comments-modal" id="classCommentsModal" style="display:none;"
+     data-list-url="@Url.Action("List","Comments")"
+     data-create-url="@Url.Action("Create","Comments")"
+     data-delete-url="@Url.Action("Delete","Comments")"
+     data-update-url="@Url.Action("Update","Comments")"
+     data-class-id="@Model.Id"
+     data-current-user-id="@currentUserId"
+     data-current-user-role="@userRole"
+     data-student-ids="@string.Join(",", studentIds)">
+    <div class="class-comments-modal-content">
+        <div class="class-comments-modal-header">
+            <h4 id="classCommentsTitle">Nhận xét của lớp học</h4>
+            <button type="button" class="announcement-modal-close" id="closeClassCommentsModal">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="class-comments-modal-body">
+            <div id="classCommentsList" class="class-comments-list"></div>
+            <div id="classCommentsEmpty" class="class-comments-empty">Chưa có nhận xét nào.</div>
+        </div>
+        <form id="classCommentForm" method="post" data-create-url="@Url.Action("Create","Comments")">
+            @Html.AntiForgeryToken()
+            <div class="class-comments-input">
+                <input type="text" id="classCommentInput" name="content" placeholder="Thêm nhận xét trong lớp học..." autocomplete="off" />
+                <button type="submit" id="submitClassComment" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Comment Confirmation Modal -->
+<div class="announcement-submodal" id="deleteCommentModal" style="display: none; z-index: 5000;">
+    <div class="announcement-submodal-content">
+        <div class="announcement-submodal-header">
+            <h4>Xóa nhận xét?</h4>
+            <button type="button" class="announcement-modal-close" id="closeDeleteCommentModal">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="announcement-submodal-body">
+            <p>Bạn có chắc chắn muốn xóa nhận xét này không?</p>
+        </div>
+        <div class="announcement-submodal-footer">
+            <button type="button" class="announcement-btn-cancel" id="cancelDeleteComment">Huỷ</button>
+            <button type="button" class="announcement-btn-post danger" id="confirmDeleteComment">Xóa</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showErrorModal(message) {
+            const errorModal = document.getElementById('errorModal');
+            const errorMessage = document.getElementById('errorMessage');
+            const closeErrorModal = document.getElementById('closeErrorModal');
+            const confirmError = document.getElementById('confirmError');
+
+            if (!errorModal || !errorMessage) return;
+
+            errorMessage.textContent = message;
+            errorModal.style.display = 'flex';
+
+            function closeModal() {
+                errorModal.style.display = 'none';
+            }
+
+            if (closeErrorModal) {
+                closeErrorModal.onclick = closeModal;
+            }
+
+            if (confirmError) {
+                confirmError.onclick = closeModal;
+            }
+
+            errorModal.onclick = function(e) {
+                if (e.target === errorModal) {
+                    closeModal();
+                }
+            };
+        }
+
+        function copyClassCode(code) {
+            navigator.clipboard.writeText(code).then(function() {
+                showErrorModal('Đã copy mã lớp: ' + code);
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        let openEditAssignmentModal = () => {};
+        let openAssignmentDeleteModal = () => {};
+
+        (function() {
+            const triggerButton = document.getElementById('triggerImageUpload');
+            const fileInput = document.getElementById('classImageInput');
+            const form = document.getElementById('updateClassImageForm');
+
+            if (!triggerButton || !fileInput || !form) {
+                return;
+            }
+
+            triggerButton.addEventListener('click', function() {
+                fileInput.value = '';
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files && fileInput.files.length > 0) {
+                    form.submit();
+                }
+            });
+        })();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const tabLinks = document.querySelectorAll('.class-tab-link');
+            const panels = document.querySelectorAll('.class-tab-panel');
+            const banner = document.querySelector('.class-details-banner');
+
+            tabLinks.forEach(function (link) {
+                link.addEventListener('click', function () {
+                    const target = link.getAttribute('data-tab-target');
+                    if (!target) return;
+
+                    tabLinks.forEach(btn => btn.classList.remove('active'));
+                    panels.forEach(panel => panel.classList.remove('active'));
+
+                    link.classList.add('active');
+                    const panel = document.querySelector('[data-tab-panel="' + target + '"]');
+                    if (panel) {
+                        panel.classList.add('active');
+                    }
+
+                    if (banner) {
+                        banner.style.display = target === 'feed' ? '' : 'none';
+                    }
+                });
+            });
+
+            const modal = document.getElementById('announcementModal');
+            const form = document.getElementById('announcementForm');
+            const openModalBtn = document.getElementById('openAnnouncementModal');
+            const closeModalBtn = document.getElementById('closeAnnouncementModal');
+            const cancelModalBtn = document.getElementById('cancelAnnouncement');
+            const contentTextarea = document.getElementById('announcementContent');
+            const postBtn = document.getElementById('postAnnouncement');
+            const attachmentsContainer = document.getElementById('attachedItems');
+            const attachmentsInput = document.getElementById('attachmentsJson');
+            const removedInput = document.getElementById('removedAttachmentIds');
+            const idField = document.getElementById('announcementIdField');
+            const fileInput = document.getElementById('announcementFileInput');
+            const fileSelector = document.getElementById('attachmentFileSelector');
+            const deleteModal = document.getElementById('deleteAnnouncementModal');
+            const deleteForm = document.getElementById('deleteAnnouncementForm');
+            const deleteIdInput = document.getElementById('deleteAnnouncementId');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteAnnouncement');
+            const cancelDeleteBtn = document.getElementById('cancelDeleteAnnouncement');
+            const closeDeleteModalBtn = document.getElementById('closeDeleteModal');
+
+            const urls = {
+                create: form?.dataset?.createUrl,
+                edit: form?.dataset?.editUrl,
+                fetch: form?.dataset?.fetchUrl
+            };
+
+            const announcementState = {
+                mode: 'create',
+                currentId: null,
+                newAttachments: [],
+                newFiles: [],
+                existingAttachments: [],
+                removedAttachmentIds: []
+            };
+
+            function generateTempId() {
+                return 'att-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+            }
+
+            function resetAnnouncementState() {
+                announcementState.mode = 'create';
+                announcementState.currentId = null;
+                announcementState.newAttachments = [];
+                announcementState.newFiles = [];
+                announcementState.existingAttachments = [];
+                announcementState.removedAttachmentIds = [];
+                updateHiddenFields();
+                syncFileInput();
+                renderAttachments();
+            }
+
+            function setFormMode(mode) {
+                if (!form) return;
+                announcementState.mode = mode;
+                if (mode === 'edit') {
+                    form.action = urls.edit || form.action;
+                    if (postBtn) postBtn.textContent = 'Lưu';
+                } else {
+                    form.action = urls.create || form.action;
+                    if (postBtn) postBtn.textContent = 'Đăng';
+                    if (idField) idField.value = '';
+                }
+            }
+
+            function openCreateAnnouncementModal() {
+                resetAnnouncementState();
+                setFormMode('create');
+                if (postBtn) postBtn.disabled = true;
+                if (contentTextarea) {
+                    contentTextarea.value = '';
+                }
+                if (attachmentsContainer) {
+                    attachmentsContainer.innerHTML = '';
+                    attachmentsContainer.style.display = 'none';
+                }
+                if (modal) {
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    contentTextarea?.focus();
+                }
+            }
+
+            function openEditAnnouncementModal(announcementId) {
+                if (!urls.fetch) return;
+                fetch(`${urls.fetch}?id=${announcementId}`)
+                    .then(res => res.ok ? res.json() : Promise.reject())
+                    .then(data => {
+                        if (!data.success) throw new Error();
+                        resetAnnouncementState();
+                        announcementState.mode = 'edit';
+                        announcementState.currentId = data.data.id;
+                        if (form) form.action = urls.edit || form.action;
+                        if (idField) idField.value = data.data.id;
+                        if (postBtn) {
+                            postBtn.textContent = 'Lưu';
+                            postBtn.disabled = false;
+                        }
+                        if (contentTextarea) {
+                            contentTextarea.value = data.data.content;
+                            contentTextarea.dispatchEvent(new Event('input'));
+                        }
+                        announcementState.existingAttachments = (data.data.attachments || []).map(att => ({
+                            id: att.id,
+                            type: att.type,
+                            title: att.title,
+                            url: att.url,
+                            fileName: att.fileName,
+                            videoId: att.videoId,
+                            _removed: false
+                        }));
+                        renderAttachments();
+                        if (modal) {
+                            modal.style.display = 'flex';
+                            document.body.style.overflow = 'hidden';
+                            contentTextarea?.focus();
+                        }
+                    })
+                    .catch(() => showErrorModal('Không thể tải dữ liệu thông báo.'));
+            }
+
+            function closeAnnouncementModal() {
+                if (!modal) return;
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                if (form) form.reset();
+                resetAnnouncementState();
+                setFormMode('create');
+                if (attachmentsContainer) {
+                    attachmentsContainer.innerHTML = '';
+                    attachmentsContainer.style.display = 'none';
+                }
+            }
+
+            function syncFileInput() {
+                if (!fileInput) return;
+                const dataTransfer = new DataTransfer();
+                announcementState.newFiles.forEach(fileEntry => dataTransfer.items.add(fileEntry.file));
+                fileInput.files = dataTransfer.files;
+            }
+
+            function updateHiddenFields() {
+                if (attachmentsInput) {
+                    const serialized = announcementState.newAttachments.map(att => ({
+                        type: att.type,
+                        title: att.title,
+                        url: att.url || null,
+                        videoId: att.videoId || null,
+                        fileName: att.fileName || null
+                    }));
+                    attachmentsInput.value = serialized.length ? JSON.stringify(serialized) : '';
+                }
+                if (removedInput) {
+                    removedInput.value = announcementState.removedAttachmentIds.length
+                        ? JSON.stringify(announcementState.removedAttachmentIds)
+                        : '';
+                }
+            }
+
+            function buildAttachmentMarkup(data) {
+                if (data.type === 'YouTube') {
+                    const thumbnailUrl = data.videoId ? `https://img.youtube.com/vi/${data.videoId}/mqdefault.jpg` : '';
+                    return `
+                        <div class="attached-item-content">
+                            <div class="attached-item-info">
+                                <div class="attached-item-title">${data.title || 'YouTube'}</div>
+                                <div class="attached-item-subtitle">${data.url || ''}</div>
+                            </div>
+                            <div class="attached-item-thumbnail">
+                                ${thumbnailUrl ? `<img src="${thumbnailUrl}" alt="YouTube thumbnail" />` : '<i class="fab fa-youtube"></i>'}
+                            </div>
+                            <button type="button" class="attached-item-menu">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>`;
+                }
+
+                if (data.type === 'Link') {
+                    return `
+                        <div class="attached-item-content">
+                            <div class="attached-item-info">
+                                <div class="attached-item-title">${data.title}</div>
+                                <div class="attached-item-subtitle">${data.url || ''}</div>
+                            </div>
+                            <div class="attached-item-icon">
+                                <i class="fas fa-link"></i>
+                            </div>
+                            <button type="button" class="attached-item-menu">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>`;
+                }
+
+                const fileName = data.fileName || data.title || '';
+                const fileExtension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+                const fileTypeMap = {
+                    'txt': 'Văn bản',
+                    'doc': 'Tài liệu',
+                    'docx': 'Tài liệu',
+                    'pdf': 'PDF',
+                    'zip': 'Nén',
+                    'rar': 'Nén',
+                    '7z': 'Nén',
+                    'jpg': 'Hình ảnh',
+                    'jpeg': 'Hình ảnh',
+                    'png': 'Hình ảnh',
+                    'gif': 'Hình ảnh'
+                };
+                const fileType = fileTypeMap[fileExtension] || 'Tệp';
+
+                return `
+                    <div class="attached-item-content">
+                        <div class="attached-item-info">
+                            <div class="attached-item-title">${fileName}</div>
+                            <div class="attached-item-subtitle">${fileType}</div>
+                        </div>
+                        <div class="attached-item-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <button type="button" class="attached-item-menu">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>`;
+            }
+
+            function renderAttachments() {
+                if (!attachmentsContainer) return;
+                attachmentsContainer.innerHTML = '';
+                const items = [];
+
+                announcementState.existingAttachments
+                    .filter(att => !att._removed)
+                    .forEach(att => items.push({ source: 'existing', data: att }));
+
+                announcementState.newAttachments.forEach(att => items.push({ source: 'new', data: att }));
+                announcementState.newFiles.forEach(att => items.push({ source: 'file', data: att }));
+
+                if (!items.length) {
+                    attachmentsContainer.style.display = 'none';
+                    return;
+                }
+
+                attachmentsContainer.style.display = 'block';
+
+                items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'attached-item-card';
+                    card.dataset.source = item.source;
+                    if (item.source === 'existing') {
+                        card.dataset.id = item.data.id;
+                    } else {
+                        card.dataset.id = item.data.tempId;
+                    }
+                    card.innerHTML = buildAttachmentMarkup(item.data);
+                    const removeBtn = card.querySelector('.attached-item-menu');
+                    if (removeBtn) {
+                        removeBtn.addEventListener('click', function() {
+                            handleAttachmentRemoval(item.source, card.dataset.id);
+                        });
+                    }
+                    attachmentsContainer.appendChild(card);
+                });
+            }
+
+            function handleAttachmentRemoval(source, identifier) {
+                if (source === 'existing') {
+                    const target = announcementState.existingAttachments.find(att => String(att.id) === String(identifier));
+                    if (target) {
+                        target._removed = true;
+                        if (!announcementState.removedAttachmentIds.includes(target.id)) {
+                            announcementState.removedAttachmentIds.push(target.id);
+                        }
+                    }
+                } else if (source === 'new') {
+                    announcementState.newAttachments = announcementState.newAttachments.filter(att => att.tempId !== identifier);
+                } else if (source === 'file') {
+                    announcementState.newFiles = announcementState.newFiles.filter(att => att.tempId !== identifier);
+                    syncFileInput();
+                }
+                updateHiddenFields();
+                renderAttachments();
+            }
+
+            function addNewAttachment(data) {
+                announcementState.newAttachments.push({
+                    tempId: generateTempId(),
+                    ...data
+                });
+                updateHiddenFields();
+                renderAttachments();
+            }
+
+            function addNewFileAttachment(file) {
+                announcementState.newFiles.push({
+                    tempId: generateTempId(),
+                    type: 'File',
+                    title: file.name,
+                    fileName: file.name,
+                    file
+                });
+                syncFileInput();
+                renderAttachments();
+            }
+
+            if (openModalBtn) {
+                openModalBtn.addEventListener('click', openCreateAnnouncementModal);
+            }
+
+            if (closeModalBtn) {
+                closeModalBtn.addEventListener('click', closeAnnouncementModal);
+            }
+
+            if (cancelModalBtn) {
+                cancelModalBtn.addEventListener('click', closeAnnouncementModal);
+            }
+
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeAnnouncementModal();
+                    }
+                });
+            }
+
+            if (contentTextarea && postBtn) {
+                contentTextarea.addEventListener('input', function() {
+                    postBtn.disabled = !this.value.trim();
+                });
+            }
+
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    if (!contentTextarea?.value.trim()) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    if (idField && announcementState.mode === 'edit') {
+                        idField.value = announcementState.currentId;
+                    }
+                    updateHiddenFields();
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                const menuToggle = e.target.closest('[data-post-menu-toggle]');
+                if (menuToggle) {
+                    e.stopPropagation();
+                    document.querySelectorAll('.post-menu-dropdown.show')
+                        .forEach(dropdown => dropdown.classList.remove('show'));
+                    const dropdown = menuToggle.nextElementSibling;
+                    dropdown?.classList.toggle('show');
+                    return;
+                }
+
+                const menuItem = e.target.closest('.post-menu-item');
+                if (menuItem) {
+                    const action = menuItem.getAttribute('data-menu-action');
+                    const id = menuItem.getAttribute('data-id');
+                    const entity = menuItem.getAttribute('data-entity') || 'announcement';
+                    document.querySelectorAll('.post-menu-dropdown.show')
+                        .forEach(dropdown => dropdown.classList.remove('show'));
+                    if (entity === 'announcement') {
+                        if (action === 'edit') {
+                            openEditAnnouncementModal(id);
+                        } else if (action === 'delete') {
+                            openDeleteModal(id);
+                        }
+                    } else if (entity === 'assignment') {
+                        if (action === 'edit') {
+                            openEditAssignmentModal(id);
+                        } else if (action === 'delete') {
+                            openAssignmentDeleteModal(id);
+                        }
+                    }
+                    return;
+                }
+
+                document.querySelectorAll('.post-menu-dropdown.show')
+                    .forEach(dropdown => dropdown.classList.remove('show'));
+            });
+
+            function openDeleteModal(announcementId) {
+                if (!deleteModal || !deleteIdInput) return;
+                deleteIdInput.value = announcementId;
+                deleteModal.style.display = 'flex';
+            }
+
+            function closeDeleteModal() {
+                if (!deleteModal) return;
+                deleteModal.style.display = 'none';
+                if (deleteIdInput) deleteIdInput.value = '';
+            }
+
+            if (confirmDeleteBtn && deleteForm) {
+                confirmDeleteBtn.addEventListener('click', function() {
+                    deleteForm.submit();
+                });
+            }
+
+            if (cancelDeleteBtn) {
+                cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+            }
+
+            if (closeDeleteModalBtn) {
+                closeDeleteModalBtn.addEventListener('click', closeDeleteModal);
+            }
+
+            if (deleteModal) {
+                deleteModal.addEventListener('click', function(e) {
+                    if (e.target === deleteModal) {
+                        closeDeleteModal();
+                    }
+                });
+            }
+
+            const formatButtons = document.querySelectorAll('[data-format]');
+            formatButtons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const format = this.getAttribute('data-format');
+                    if (!contentTextarea) return;
+
+                    const start = contentTextarea.selectionStart;
+                    const end = contentTextarea.selectionEnd;
+                    const selectedText = contentTextarea.value.substring(start, end);
+                    let formattedText = '';
+
+                    switch(format) {
+                        case 'list':
+                            if (selectedText) {
+                                const lines = selectedText.split('\n');
+                                formattedText = lines.map(line => line.trim() ? `• ${line}` : line).join('\n');
+                            } else {
+                                formattedText = '• ';
+                            }
+                            break;
+                        case 'emoji':
+                            showEmojiPicker(contentTextarea, start, end, selectedText);
+                            return;
+                    }
+
+                    contentTextarea.value = contentTextarea.value.substring(0, start) + formattedText + contentTextarea.value.substring(end);
+                    contentTextarea.focus();
+                    const newPos = start + formattedText.length;
+                    contentTextarea.setSelectionRange(newPos, newPos);
+                    contentTextarea.dispatchEvent(new Event('input'));
+                });
+            });
+
+            function showEmojiPicker(textarea, start, end, selectedText) {
+                const emojis = [
+                    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+                    '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+                    '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+                    '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+                    '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+                    '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+                    '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+                    '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐',
+                    '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈',
+                    '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾',
+                    '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'
+                ];
+
+                const existingPicker = document.getElementById('emojiPicker');
+                if (existingPicker) {
+                    existingPicker.remove();
+                }
+
+                const picker = document.createElement('div');
+                picker.id = 'emojiPicker';
+                picker.className = 'emoji-picker';
+
+                emojis.forEach(emoji => {
+                    const emojiBtn = document.createElement('button');
+                    emojiBtn.type = 'button';
+                    emojiBtn.className = 'emoji-picker-item';
+                    emojiBtn.textContent = emoji;
+                    emojiBtn.addEventListener('click', function() {
+                        const emojiText = selectedText ? `${selectedText} ${emoji}` : emoji;
+                        textarea.value = textarea.value.substring(0, start) + emojiText + textarea.value.substring(end);
+                        textarea.focus();
+                        const newPos = start + emojiText.length;
+                        textarea.setSelectionRange(newPos, newPos);
+                        textarea.dispatchEvent(new Event('input'));
+                        picker.remove();
+                    });
+                    picker.appendChild(emojiBtn);
+                });
+
+                const textareaRect = textarea.getBoundingClientRect();
+                picker.style.position = 'absolute';
+                picker.style.top = (textareaRect.bottom + 5) + 'px';
+                picker.style.left = textareaRect.left + 'px';
+                picker.style.zIndex = '3000';
+
+                document.body.appendChild(picker);
+
+                setTimeout(() => {
+                    const closePicker = (e) => {
+                        if (!picker.contains(e.target) && e.target !== textarea) {
+                            picker.remove();
+                            document.removeEventListener('click', closePicker);
+                        }
+                    };
+                    document.addEventListener('click', closePicker);
+                }, 100);
+            }
+
+            const youtubeBtn = document.getElementById('youtubeBtn');
+            const youtubeModal = document.getElementById('youtubeModal');
+            const closeYoutubeModal = document.getElementById('closeYoutubeModal');
+            const cancelYoutube = document.getElementById('cancelYoutube');
+            const addYoutube = document.getElementById('addYoutube');
+            const youtubeUrl = document.getElementById('youtubeUrl');
+
+            if (youtubeBtn && youtubeModal) {
+                youtubeBtn.addEventListener('click', function() {
+                    youtubeModal.style.display = 'flex';
+                    if (addYoutube) addYoutube.disabled = true;
+                    if (youtubeUrl) youtubeUrl.value = '';
+                });
+            }
+
+            function closeYoutube() {
+                if (!youtubeModal) return;
+                youtubeModal.style.display = 'none';
+                if (addYoutube) addYoutube.disabled = true;
+                if (youtubeUrl) youtubeUrl.value = '';
+            }
+
+            [closeYoutubeModal, cancelYoutube].forEach(btn => {
+                if (btn) btn.addEventListener('click', closeYoutube);
+            });
+
+            if (youtubeModal) {
+                youtubeModal.addEventListener('click', function(e) {
+                    if (e.target === youtubeModal) closeYoutube();
+                });
+            }
+
+            if (youtubeUrl && addYoutube) {
+                youtubeUrl.addEventListener('input', function() {
+                    addYoutube.disabled = !this.value.trim();
+                });
+
+                addYoutube.addEventListener('click', function() {
+                    const url = youtubeUrl.value.trim();
+                    if (!url) return;
+
+                    let videoId = '';
+                    const patterns = [
+                        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                        /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+                    ];
+
+                    for (const pattern of patterns) {
+                        const match = url.match(pattern);
+                        if (match) {
+                            videoId = match[1];
+                            break;
+                        }
+                    }
+
+                    if (!videoId) {
+                        showErrorModal('URL YouTube không hợp lệ');
+                        return;
+                    }
+
+                    addNewAttachment({ type: 'YouTube', title: 'YouTube', url, videoId });
+                    closeYoutube();
+                });
+            }
+
+            const uploadFileBtn = document.getElementById('uploadFileBtn');
+            if (uploadFileBtn && fileSelector) {
+                uploadFileBtn.addEventListener('click', function() {
+                    fileSelector.click();
+                });
+
+                fileSelector.addEventListener('change', function() {
+                    if (!this.files || !this.files.length) return;
+                    Array.from(this.files).forEach(file => addNewFileAttachment(file));
+                    this.value = '';
+                });
+            }
+
+            const linkBtn = document.getElementById('linkBtn');
+            const linkModal = document.getElementById('linkModal');
+            const closeLinkModal = document.getElementById('closeLinkModal');
+            const cancelLink = document.getElementById('cancelLink');
+            const addLink = document.getElementById('addLink');
+            const linkText = document.getElementById('linkText');
+            const linkUrl = document.getElementById('linkUrl');
+
+            if (linkBtn && linkModal) {
+                linkBtn.addEventListener('click', function() {
+                    linkModal.style.display = 'flex';
+                    if (addLink) addLink.disabled = true;
+                    if (linkText) linkText.value = '';
+                    if (linkUrl) linkUrl.value = '';
+                });
+            }
+
+            function closeLinkModalFn() {
+                if (!linkModal) return;
+                linkModal.style.display = 'none';
+                if (addLink) addLink.disabled = true;
+            }
+
+            [closeLinkModal, cancelLink].forEach(btn => {
+                if (btn) btn.addEventListener('click', closeLinkModalFn);
+            });
+
+            if (linkModal) {
+                linkModal.addEventListener('click', function(e) {
+                    if (e.target === linkModal) closeLinkModalFn();
+                });
+            }
+
+            function validateLinkInputs() {
+                if (addLink && linkText && linkUrl) {
+                    addLink.disabled = !linkText.value.trim() || !linkUrl.value.trim();
+                }
+            }
+
+            if (linkText) linkText.addEventListener('input', validateLinkInputs);
+            if (linkUrl) linkUrl.addEventListener('input', validateLinkInputs);
+
+            if (addLink && linkText && linkUrl) {
+                addLink.addEventListener('click', function() {
+                    const text = linkText.value.trim();
+                    const url = linkUrl.value.trim();
+                    if (!text || !url) return;
+                    if (!/^https?:\/\//i.test(url)) {
+                        showErrorModal('URL phải bắt đầu bằng http:// hoặc https://');
+                        return;
+                    }
+                    addNewAttachment({ type: 'Link', title: text, url });
+                    closeLinkModalFn();
+                });
+            }
+
+            // Assignment Modal Logic
+            const assignmentModal = document.getElementById('assignmentModal');
+            const assignmentForm = document.getElementById('assignmentForm');
+            if (assignmentModal && assignmentForm) {
+                const openAssignmentModalBtn = document.getElementById('openAssignmentModal');
+                const closeAssignmentModalBtn = document.getElementById('closeAssignmentModal');
+                const cancelAssignmentModalBtn = document.getElementById('cancelAssignmentModal');
+                const assignmentTitleInput = document.getElementById('assignmentTitle');
+                const assignmentDescription = document.getElementById('assignmentDescription');
+                const assignmentAttachmentsContainer = document.getElementById('assignmentAttachedItems');
+                const assignmentAttachmentsJsonInput = document.getElementById('assignmentAttachmentsJson');
+                const assignmentRemovedInput = document.getElementById('assignmentRemovedAttachmentIds');
+                const assignmentIdField = document.getElementById('assignmentIdField');
+                const assignmentClassInput = assignmentForm.querySelector('input[name="ClassId"]');
+                const assignmentFileInput = document.getElementById('assignmentFileInput');
+                const assignmentFileSelector = document.getElementById('assignmentFileSelector');
+                const assignmentSaveBtn = document.getElementById('saveAssignmentBtn');
+                const assignmentPublishInput = document.getElementById('assignmentPublishAt');
+                const assignmentDueInput = document.getElementById('assignmentDueDate');
+                const assignmentUrls = {
+                    create: assignmentForm.dataset.createUrl,
+                    edit: assignmentForm.dataset.editUrl,
+                    fetch: assignmentForm.dataset.fetchUrl
+                };
+
+                const assignmentYoutubeModal = document.getElementById('assignmentYoutubeModal');
+                const assignmentYoutubeBtn = document.getElementById('assignmentYoutubeBtn');
+                const assignmentYoutubeUrl = document.getElementById('assignmentYoutubeUrl');
+                const addAssignmentYoutube = document.getElementById('addAssignmentYoutube');
+                const closeAssignmentYoutubeModal = document.getElementById('closeAssignmentYoutubeModal');
+                const cancelAssignmentYoutube = document.getElementById('cancelAssignmentYoutube');
+
+                const assignmentLinkModal = document.getElementById('assignmentLinkModal');
+                const assignmentLinkBtn = document.getElementById('assignmentLinkBtn');
+                const assignmentLinkText = document.getElementById('assignmentLinkText');
+                const assignmentLinkUrl = document.getElementById('assignmentLinkUrl');
+                const addAssignmentLink = document.getElementById('addAssignmentLink');
+                const closeAssignmentLinkModal = document.getElementById('closeAssignmentLinkModal');
+                const cancelAssignmentLink = document.getElementById('cancelAssignmentLink');
+
+                const assignmentUploadFileBtn = document.getElementById('assignmentUploadFileBtn');
+
+                const deleteAssignmentModal = document.getElementById('deleteAssignmentModal');
+                const deleteAssignmentForm = document.getElementById('deleteAssignmentForm');
+                const deleteAssignmentIdInput = document.getElementById('deleteAssignmentId');
+                const confirmDeleteAssignmentBtn = document.getElementById('confirmDeleteAssignment');
+                const cancelDeleteAssignmentBtn = document.getElementById('cancelDeleteAssignment');
+                const closeDeleteAssignmentBtn = document.getElementById('closeDeleteAssignmentModal');
+
+                const assignmentState = {
+                    mode: 'create',
+                    currentId: null,
+                    attachments: [],
+                    files: [],
+                    existingAttachments: [],
+                    removedAttachmentIds: []
+                };
+
+                function updateAssignmentHiddenFields() {
+                    if (assignmentAttachmentsJsonInput) {
+                        const serialized = assignmentState.attachments.map(att => ({
+                            type: att.type,
+                            title: att.title,
+                            url: att.url || null,
+                            videoId: att.videoId || null,
+                            fileName: att.fileName || null
+                        }));
+                        assignmentAttachmentsJsonInput.value = serialized.length ? JSON.stringify(serialized) : '';
+                    }
+                    if (assignmentRemovedInput) {
+                        assignmentRemovedInput.value = assignmentState.removedAttachmentIds.length
+                            ? JSON.stringify(assignmentState.removedAttachmentIds)
+                            : '';
+                    }
+                }
+
+                function syncAssignmentFileInput() {
+                    if (!assignmentFileInput) return;
+                    const dataTransfer = new DataTransfer();
+                    assignmentState.files.forEach(fileEntry => dataTransfer.items.add(fileEntry.file));
+                    assignmentFileInput.files = dataTransfer.files;
+                }
+
+                function buildAssignmentAttachmentMarkup(data) {
+                    if (data.type === 'YouTube') {
+                        const thumbnailUrl = data.videoId ? `https://img.youtube.com/vi/${data.videoId}/mqdefault.jpg` : '';
+                        return `
+                            <div class="attached-item-content">
+                                <div class="attached-item-info">
+                                    <div class="attached-item-title">${data.title || 'YouTube'}</div>
+                                    <div class="attached-item-subtitle">${data.url || ''}</div>
+                                </div>
+                                <div class="attached-item-thumbnail">
+                                    ${thumbnailUrl ? `<img src="${thumbnailUrl}" alt="YouTube thumbnail" />` : '<i class="fab fa-youtube"></i>'}
+                                </div>
+                                <button type="button" class="attached-item-menu">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>`;
+                    }
+
+                    if (data.type === 'Link') {
+                        return `
+                            <div class="attached-item-content">
+                                <div class="attached-item-info">
+                                    <div class="attached-item-title">${data.title}</div>
+                                    <div class="attached-item-subtitle">${data.url || ''}</div>
+                                </div>
+                                <div class="attached-item-icon">
+                                    <i class="fas fa-link"></i>
+                                </div>
+                                <button type="button" class="attached-item-menu">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>`;
+                    }
+
+                    const fileName = data.fileName || data.title || '';
+                    return `
+                        <div class="attached-item-content">
+                            <div class="attached-item-info">
+                                <div class="attached-item-title">${fileName}</div>
+                                <div class="attached-item-subtitle">Tệp đính kèm</div>
+                            </div>
+                            <div class="attached-item-icon">
+                                <i class="fas fa-file"></i>
+                            </div>
+                            <button type="button" class="attached-item-menu">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>`;
+                }
+
+                function renderAssignmentAttachments() {
+                    if (!assignmentAttachmentsContainer) return;
+                    assignmentAttachmentsContainer.innerHTML = '';
+
+                    const items = [];
+                    assignmentState.existingAttachments.forEach(att => {
+                        if (!att._removed) {
+                            items.push({ source: 'existing', identifier: att.id, data: att });
+                        }
+                    });
+                    assignmentState.attachments.forEach(att => items.push({ source: 'new', identifier: att.tempId, data: att }));
+                    assignmentState.files.forEach(fileEntry => items.push({ source: 'file', identifier: fileEntry.tempId, data: fileEntry }));
+
+                    if (!items.length) {
+                        assignmentAttachmentsContainer.style.display = 'none';
+                        return;
+                    }
+
+                    assignmentAttachmentsContainer.style.display = 'block';
+
+                    items.forEach(item => {
+                        const card = document.createElement('div');
+                        card.className = 'attached-item-card';
+                        card.innerHTML = buildAssignmentAttachmentMarkup(item.data);
+
+                        const removeBtn = card.querySelector('.attached-item-menu');
+                        if (removeBtn) {
+                            removeBtn.addEventListener('click', function() {
+                                removeAssignmentAttachment(item.source, item.identifier);
+                            });
+                        }
+
+                        assignmentAttachmentsContainer.appendChild(card);
+                    });
+                }
+
+                function removeAssignmentAttachment(source, identifier) {
+                    if (source === 'existing') {
+                        const target = assignmentState.existingAttachments.find(att => att.id === identifier);
+                        if (target) {
+                            target._removed = true;
+                            if (!assignmentState.removedAttachmentIds.includes(target.id)) {
+                                assignmentState.removedAttachmentIds.push(target.id);
+                            }
+                            updateAssignmentHiddenFields();
+                            renderAssignmentAttachments();
+                        }
+                        return;
+                    }
+
+                    if (source === 'file') {
+                        assignmentState.files = assignmentState.files.filter(file => file.tempId !== identifier);
+                        syncAssignmentFileInput();
+                    } else {
+                        assignmentState.attachments = assignmentState.attachments.filter(att => att.tempId !== identifier);
+                        updateAssignmentHiddenFields();
+                    }
+                    renderAssignmentAttachments();
+                }
+
+                function addAssignmentAttachment(data) {
+                    assignmentState.attachments.push({
+                        tempId: generateTempId(),
+                        ...data
+                    });
+                    updateAssignmentHiddenFields();
+                    renderAssignmentAttachments();
+                }
+
+                function addAssignmentFile(file) {
+                    assignmentState.files.push({
+                        tempId: generateTempId(),
+                        type: 'File',
+                        title: file.name,
+                        fileName: file.name,
+                        file
+                    });
+                    syncAssignmentFileInput();
+                    renderAssignmentAttachments();
+                }
+
+                function resetAssignmentState() {
+                    assignmentState.mode = 'create';
+                    assignmentState.currentId = null;
+                    assignmentState.attachments = [];
+                    assignmentState.files = [];
+                    assignmentState.existingAttachments = [];
+                    assignmentState.removedAttachmentIds = [];
+                    updateAssignmentHiddenFields();
+                    syncAssignmentFileInput();
+                }
+
+                function setAssignmentFormMode(mode) {
+                    assignmentState.mode = mode;
+                    if (mode === 'edit') {
+                        assignmentForm.action = assignmentUrls.edit || assignmentForm.action;
+                        if (assignmentSaveBtn) {
+                            assignmentSaveBtn.textContent = 'Lưu';
+                        }
+                    } else {
+                        assignmentForm.action = assignmentUrls.create || assignmentForm.action;
+                        if (assignmentSaveBtn) {
+                            assignmentSaveBtn.textContent = 'Tạo';
+                        }
+                        if (assignmentIdField) assignmentIdField.value = '';
+                    }
+                }
+
+                function openCreateAssignmentModal() {
+                    assignmentForm.reset();
+                    resetAssignmentState();
+                    setAssignmentFormMode('create');
+                    if (assignmentAttachmentsContainer) {
+                        assignmentAttachmentsContainer.innerHTML = '';
+                        assignmentAttachmentsContainer.style.display = 'none';
+                    }
+                    if (assignmentSaveBtn) assignmentSaveBtn.disabled = true;
+                    assignmentModal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    assignmentTitleInput?.focus();
+                }
+
+                function closeAssignmentModalFn() {
+                    assignmentModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                    assignmentForm.reset();
+                    resetAssignmentState();
+                    setAssignmentFormMode('create');
+                    if (assignmentAttachmentsContainer) {
+                        assignmentAttachmentsContainer.innerHTML = '';
+                        assignmentAttachmentsContainer.style.display = 'none';
+                    }
+                    if (assignmentYoutubeModal) assignmentYoutubeModal.style.display = 'none';
+                    if (assignmentLinkModal) assignmentLinkModal.style.display = 'none';
+                }
+
+                function validateAssignmentForm() {
+                    if (assignmentSaveBtn) {
+                        const hasTitle = assignmentTitleInput && assignmentTitleInput.value.trim().length > 0;
+                        assignmentSaveBtn.disabled = !hasTitle;
+                    }
+                }
+
+                openAssignmentModalBtn?.addEventListener('click', openCreateAssignmentModal);
+                closeAssignmentModalBtn?.addEventListener('click', closeAssignmentModalFn);
+                cancelAssignmentModalBtn?.addEventListener('click', closeAssignmentModalFn);
+
+                assignmentModal.addEventListener('click', function(e) {
+                    if (e.target === assignmentModal) {
+                        closeAssignmentModalFn();
+                    }
+                });
+
+                assignmentTitleInput?.addEventListener('input', validateAssignmentForm);
+
+                assignmentForm.addEventListener('submit', function(e) {
+                    if (assignmentState.mode === 'edit' && assignmentIdField) {
+                        assignmentIdField.value = assignmentState.currentId || '';
+                    }
+                    if (!assignmentTitleInput?.value.trim()) {
+                        e.preventDefault();
+                        showErrorModal('Tiêu đề bài tập là bắt buộc.');
+                        return;
+                    }
+                    const nowDate = new Date();
+                    let publishDate = null;
+                    if (assignmentPublishInput?.value) {
+                        publishDate = new Date(assignmentPublishInput.value);
+                        if (isNaN(publishDate.getTime())) {
+                            e.preventDefault();
+                            showErrorModal('Ngày đăng bài không hợp lệ.');
+                            return;
+                        }
+                        if (publishDate < nowDate) {
+                            e.preventDefault();
+                            showErrorModal('Ngày đăng bài không được trước thời điểm hiện tại.');
+                            return;
+                        }
+                    }
+                    let dueDate = null;
+                    if (assignmentDueInput?.value) {
+                        dueDate = new Date(assignmentDueInput.value);
+                        if (isNaN(dueDate.getTime())) {
+                            e.preventDefault();
+                            showErrorModal('Ngày hết hạn không hợp lệ.');
+                            return;
+                        }
+                    }
+                    const effectivePublishDate = publishDate ?? nowDate;
+                    if (dueDate && dueDate <= effectivePublishDate) {
+                        e.preventDefault();
+                        showErrorModal('Hạn nộp bài phải lớn hơn thời điểm đăng bài.');
+                        return;
+                    }
+                    updateAssignmentHiddenFields();
+                });
+
+                const assignmentFormatButtons = document.querySelectorAll('[data-assignment-format]');
+                assignmentFormatButtons.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        if (!assignmentDescription) return;
+                        const format = this.getAttribute('data-assignment-format');
+                        const start = assignmentDescription.selectionStart;
+                        const end = assignmentDescription.selectionEnd;
+                        const selectedText = assignmentDescription.value.substring(start, end);
+                        let formattedText = '';
+
+                        if (format === 'list') {
+                            if (selectedText) {
+                                const lines = selectedText.split('\n');
+                                formattedText = lines.map(line => line.trim() ? `• ${line}` : line).join('\n');
+                            } else {
+                                formattedText = '• ';
+                            }
+                        } else if (format === 'emoji') {
+                            showEmojiPicker(assignmentDescription, start, end, selectedText);
+                            return;
+                        }
+
+                        assignmentDescription.value = assignmentDescription.value.substring(0, start) + formattedText + assignmentDescription.value.substring(end);
+                        assignmentDescription.focus();
+                        const newPos = start + formattedText.length;
+                        assignmentDescription.setSelectionRange(newPos, newPos);
+                        assignmentDescription.dispatchEvent(new Event('input'));
+                    });
+                });
+
+                if (assignmentUploadFileBtn && assignmentFileSelector) {
+                    assignmentUploadFileBtn.addEventListener('click', function() {
+                        assignmentFileSelector.click();
+                    });
+
+                    assignmentFileSelector.addEventListener('change', function() {
+                        if (!this.files || !this.files.length) return;
+                        Array.from(this.files).forEach(file => addAssignmentFile(file));
+                        this.value = '';
+                    });
+                }
+
+                function closeAssignmentYoutube() {
+                    if (assignmentYoutubeModal) assignmentYoutubeModal.style.display = 'none';
+                    if (assignmentYoutubeUrl) assignmentYoutubeUrl.value = '';
+                    if (addAssignmentYoutube) addAssignmentYoutube.disabled = true;
+                }
+
+                function closeAssignmentLink() {
+                    if (assignmentLinkModal) assignmentLinkModal.style.display = 'none';
+                    if (assignmentLinkText) assignmentLinkText.value = '';
+                    if (assignmentLinkUrl) assignmentLinkUrl.value = '';
+                    if (addAssignmentLink) addAssignmentLink.disabled = true;
+                }
+
+                assignmentYoutubeBtn?.addEventListener('click', function() {
+                    if (assignmentYoutubeModal) assignmentYoutubeModal.style.display = 'flex';
+                    if (assignmentYoutubeUrl) assignmentYoutubeUrl.value = '';
+                    if (addAssignmentYoutube) addAssignmentYoutube.disabled = true;
+                });
+
+                closeAssignmentYoutubeModal?.addEventListener('click', closeAssignmentYoutube);
+                cancelAssignmentYoutube?.addEventListener('click', closeAssignmentYoutube);
+
+                assignmentYoutubeModal?.addEventListener('click', function(e) {
+                    if (e.target === assignmentYoutubeModal) closeAssignmentYoutube();
+                });
+
+                if (assignmentYoutubeUrl && addAssignmentYoutube) {
+                    assignmentYoutubeUrl.addEventListener('input', function() {
+                        addAssignmentYoutube.disabled = !this.value.trim();
+                    });
+
+                    addAssignmentYoutube.addEventListener('click', function() {
+                        const url = assignmentYoutubeUrl.value.trim();
+                        if (!url) return;
+                        let videoId = '';
+                        const patterns = [
+                            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                            /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+                        ];
+                        for (const pattern of patterns) {
+                            const match = url.match(pattern);
+                            if (match) {
+                                videoId = match[1];
+                                break;
+                            }
+                        }
+                        if (!videoId) {
+                            showErrorModal('URL YouTube không hợp lệ');
+                            return;
+                        }
+                        addAssignmentAttachment({ type: 'YouTube', title: 'YouTube', url, videoId });
+                        closeAssignmentYoutube();
+                    });
+                }
+
+                assignmentLinkBtn?.addEventListener('click', function() {
+                    if (assignmentLinkModal) assignmentLinkModal.style.display = 'flex';
+                    if (assignmentLinkText) assignmentLinkText.value = '';
+                    if (assignmentLinkUrl) assignmentLinkUrl.value = '';
+                    if (addAssignmentLink) addAssignmentLink.disabled = true;
+                });
+
+                closeAssignmentLinkModal?.addEventListener('click', closeAssignmentLink);
+                cancelAssignmentLink?.addEventListener('click', closeAssignmentLink);
+
+                assignmentLinkModal?.addEventListener('click', function(e) {
+                    if (e.target === assignmentLinkModal) closeAssignmentLink();
+                });
+
+                function validateAssignmentLinkInputs() {
+                    if (addAssignmentLink && assignmentLinkText && assignmentLinkUrl) {
+                        const text = assignmentLinkText.value.trim();
+                        const url = assignmentLinkUrl.value.trim();
+                        addAssignmentLink.disabled = !text || !url;
+                    }
+                }
+
+                assignmentLinkText?.addEventListener('input', validateAssignmentLinkInputs);
+                assignmentLinkUrl?.addEventListener('input', validateAssignmentLinkInputs);
+
+                if (addAssignmentLink && assignmentLinkText && assignmentLinkUrl) {
+                    addAssignmentLink.addEventListener('click', function() {
+                        const text = assignmentLinkText.value.trim();
+                        const url = assignmentLinkUrl.value.trim();
+                        if (!text || !url) return;
+                        if (!/^https?:\/\//i.test(url)) {
+                            showErrorModal('URL phải bắt đầu bằng http:// hoặc https://');
+                            return;
+                        }
+                        addAssignmentAttachment({ type: 'Link', title: text, url });
+                        closeAssignmentLink();
+                    });
+                }
+
+                function openAssignmentDeleteModalFn(assignmentId) {
+                    if (!deleteAssignmentModal || !deleteAssignmentIdInput) return;
+                    deleteAssignmentIdInput.value = assignmentId;
+                    deleteAssignmentModal.style.display = 'flex';
+                }
+
+                function closeAssignmentDeleteModal() {
+                    if (!deleteAssignmentModal) return;
+                    deleteAssignmentModal.style.display = 'none';
+                    if (deleteAssignmentIdInput) deleteAssignmentIdInput.value = '';
+                }
+
+                confirmDeleteAssignmentBtn?.addEventListener('click', function() {
+                    deleteAssignmentForm?.submit();
+                });
+                cancelDeleteAssignmentBtn?.addEventListener('click', closeAssignmentDeleteModal);
+                closeDeleteAssignmentBtn?.addEventListener('click', closeAssignmentDeleteModal);
+                deleteAssignmentModal?.addEventListener('click', function(e) {
+                    if (e.target === deleteAssignmentModal) {
+                        closeAssignmentDeleteModal();
+                    }
+                });
+
+                openEditAssignmentModal = function(assignmentId) {
+                    if (!assignmentUrls.fetch) {
+                        showErrorModal('Không thể chỉnh sửa bài tập lúc này.');
+                        return;
+                    }
+                    fetch(`${assignmentUrls.fetch}?id=${assignmentId}`)
+                        .then(res => res.ok ? res.json() : Promise.reject())
+                        .then(response => {
+                            if (!response.success) throw new Error();
+                            const data = response.data;
+                            assignmentForm.reset();
+                            resetAssignmentState();
+                            setAssignmentFormMode('edit');
+                            assignmentState.currentId = data.id;
+                            assignmentState.existingAttachments = (data.attachments || []).map(att => ({
+                                id: att.id,
+                                type: att.type,
+                                title: att.title,
+                                url: att.url,
+                                fileName: att.fileName,
+                                videoId: att.videoId,
+                                _removed: false
+                            }));
+                            assignmentState.removedAttachmentIds = [];
+                            if (assignmentIdField) assignmentIdField.value = data.id;
+                            if (assignmentClassInput && data.classId) assignmentClassInput.value = data.classId;
+                            if (assignmentTitleInput) assignmentTitleInput.value = data.title || '';
+                            if (assignmentDescription) {
+                                assignmentDescription.value = data.description || '';
+                            }
+                            if (assignmentPublishInput) assignmentPublishInput.value = data.publishAt || '';
+                            if (assignmentDueInput) assignmentDueInput.value = data.dueDate || '';
+                            if (assignmentSaveBtn) {
+                                assignmentSaveBtn.textContent = 'Lưu';
+                                assignmentSaveBtn.disabled = !assignmentTitleInput?.value.trim();
+                            }
+                            renderAssignmentAttachments();
+                            assignmentModal.style.display = 'flex';
+                            document.body.style.overflow = 'hidden';
+                            assignmentTitleInput?.focus();
+                        })
+                        .catch(() => showErrorModal('Không thể tải dữ liệu bài tập.'));
+                };
+
+                openAssignmentDeleteModal = function(assignmentId) {
+                    openAssignmentDeleteModalFn(assignmentId);
+                };
+            }
+
+            // Comments modal logic
+            (function() {
+                const commentsModal = document.getElementById('classCommentsModal');
+                if (!commentsModal) return;
+
+                const commentsList = document.getElementById('classCommentsList');
+                const commentsEmpty = document.getElementById('classCommentsEmpty');
+                const commentsTitle = document.getElementById('classCommentsTitle');
+                const closeCommentsModalBtn = document.getElementById('closeClassCommentsModal');
+                const commentForm = document.getElementById('classCommentForm');
+                const commentInput = document.getElementById('classCommentInput');
+                const commentSubmitBtn = document.getElementById('submitClassComment');
+                const classId = commentsModal.dataset.classId;
+                const currentUserId = parseInt(commentsModal.dataset.currentUserId || '0');
+                const currentUserRole = commentsModal.dataset.currentUserRole || 'Student';
+                const studentIdsStr = commentsModal.dataset.studentIds || '';
+                const studentIds = studentIdsStr ? studentIdsStr.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [];
+                const isTeacher = currentUserRole === 'Teacher';
+                const urls = {
+                    list: commentsModal.dataset.listUrl,
+                    create: commentForm?.dataset.createUrl,
+                    delete: commentsModal.dataset.deleteUrl,
+                    update: commentsModal.dataset.updateUrl
+                };
+
+                let currentContext = null;
+                let currentTrigger = null;
+                let commentsData = [];
+                let pendingDeleteCommentId = null;
+                let pendingDeleteButton = null;
+                let pendingDeleteDropdown = null;
+                let currentEditingCommentId = null;
+                let originalCommentContent = null;
+                
+                // Modal xác nhận xóa comment
+                const deleteCommentModal = document.getElementById('deleteCommentModal');
+                const closeDeleteCommentModalBtn = document.getElementById('closeDeleteCommentModal');
+                const cancelDeleteCommentBtn = document.getElementById('cancelDeleteComment');
+                const confirmDeleteCommentBtn = document.getElementById('confirmDeleteComment');
+
+                function toggleCommentSubmit() {
+                    if (!commentSubmitBtn || !commentInput) return;
+                    commentSubmitBtn.disabled = !commentInput.value.trim();
+                }
+
+                function formatCommentTime(dateString) {
+                    const date = new Date(dateString);
+                    if (isNaN(date.getTime())) return '';
+                    return date.toLocaleString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit'
+                    });
+                }
+
+                function canDeleteComment(commentUserId) {
+                    // User có thể xóa comment của chính mình
+                    if (commentUserId === currentUserId) {
+                        return true;
+                    }
+                    // Giáo viên có thể xóa comment của học sinh
+                    if (isTeacher && studentIds.includes(commentUserId)) {
+                        return true;
+                    }
+                    return false;
+                }
+                
+                function canEditComment(commentUserId) {
+                    // Chỉ giáo viên có thể chỉnh sửa comment của chính mình
+                    return isTeacher && commentUserId === currentUserId;
+                }
+
+                function renderComments(items) {
+                    if (!commentsList || !commentsEmpty) return;
+                    commentsList.innerHTML = '';
+                    commentsData = items;
+
+                    if (!items.length) {
+                        commentsEmpty.style.display = 'block';
+                    } else {
+                        commentsEmpty.style.display = 'none';
+                        items.forEach(comment => {
+                            const row = document.createElement('div');
+                            row.className = 'class-comment-item';
+                            row.setAttribute('data-comment-id', comment.id);
+                            
+                            const canDelete = canDeleteComment(comment.userId);
+                            const canEdit = canEditComment(comment.userId);
+                            const commentContentEscaped = escapeHtml(comment.content).replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
+                            const hasAvatar = comment.avatarUrl && comment.avatarUrl.trim().length > 0;
+                            
+                            row.innerHTML = `
+                                <div class="class-comment-avatar">
+                                    ${hasAvatar
+                                        ? `<img src="${comment.avatarUrl}" alt="${escapeHtml(comment.user)}" class="class-comment-avatar-img" />`
+                                        : `${comment.initials || '?'}`
+                                    }
+                                </div>
+                                <div class="class-comment-body" style="flex: 1; position: relative;">
+                                    <div class="class-comment-meta" style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span class="class-comment-author">${escapeHtml(comment.user)}</span>
+                                            <span class="class-comment-time">${formatCommentTime(comment.createdAt)}</span>
+                                        </div>
+                                        ${(canDelete || canEdit) ? `
+                                        <div class="class-comment-menu" style="position: relative; margin-left: auto;">
+                                            <button type="button" class="comment-menu-btn-modal" style="background: none; border: none; cursor: pointer; padding: 4px 8px; color: #666; font-size: 16px; border-radius: 4px; position: relative; z-index: 10;" data-comment-id="${comment.id}">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <div class="comment-menu-dropdown-modal" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #e0e0e0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 10000; margin-top: 4px; min-width: 120px;">
+                                                ${canEdit ? `
+                                                <button type="button" class="comment-edit-btn-modal" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #1976d2; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" data-comment-id="${comment.id}" data-comment-content="${commentContentEscaped}">
+                                                    <i class="fas fa-edit" style="margin-right: 8px;"></i>Chỉnh sửa
+                                                </button>
+                                                ` : ''}
+                                                ${canDelete ? `
+                                                <button type="button" class="comment-delete-btn-modal" style="width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; cursor: pointer; color: #d32f2f; font-size: 14px; display: block; position: relative; z-index: 10001; pointer-events: auto;" data-comment-id="${comment.id}">
+                                                    <i class="fas fa-trash" style="margin-right: 8px;"></i>Xóa
+                                                </button>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    <div class="class-comment-content">${escapeHtml(comment.content)}</div>
+                                </div>`;
+                            commentsList.appendChild(row);
+                            
+                            // Thêm event listeners nếu có nút chỉnh sửa hoặc xóa
+                            if (canDelete || canEdit) {
+                                const menuBtn = row.querySelector('.comment-menu-btn-modal');
+                                const editBtn = row.querySelector('.comment-edit-btn-modal');
+                                const deleteBtn = row.querySelector('.comment-delete-btn-modal');
+                                const dropdown = row.querySelector('.comment-menu-dropdown-modal');
+                                
+                                if (menuBtn && dropdown) {
+                                    menuBtn.addEventListener('click', function(e) {
+                                        e.stopPropagation();
+                                        toggleCommentMenuInModal(this, dropdown);
+                                    });
+                                }
+                                
+                                if (editBtn) {
+                                    editBtn.addEventListener('click', function(e) {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        const commentId = parseInt(this.getAttribute('data-comment-id'));
+                                        console.log('Edit button clicked for comment ID:', commentId);
+                                        if (commentId && !isNaN(commentId)) {
+                                            startInlineEditComment(commentId, this, dropdown);
+                                        } else {
+                                            console.error('Invalid comment ID:', commentId);
+                                            alert('Không thể xác định bình luận để chỉnh sửa.');
+                                        }
+                                    });
+                                }
+                                
+                                if (deleteBtn) {
+                                    deleteBtn.addEventListener('click', function(e) {
+                                        e.stopPropagation();
+                                        const commentId = parseInt(this.getAttribute('data-comment-id'));
+                                        openDeleteCommentModal(commentId, this, dropdown);
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    if (currentTrigger) {
+                        const label = currentTrigger.querySelector('[data-comment-label]');
+                        if (label) {
+                            label.textContent = items.length
+                                ? `${items.length} nhận xét về lớp`
+                                : 'Thêm nhận xét về lớp';
+                        }
+                    }
+                }
+                
+                function toggleCommentMenuInModal(button, dropdown) {
+                    const isOpen = dropdown && dropdown.style.display === 'block';
+                    
+                    // Đóng tất cả các menu khác
+                    document.querySelectorAll('.comment-menu-dropdown-modal').forEach(menu => {
+                        if (menu !== dropdown) {
+                            menu.style.display = 'none';
+                        }
+                    });
+                    
+                    // Toggle menu hiện tại
+                    if (dropdown) {
+                        dropdown.style.display = isOpen ? 'none' : 'block';
+                    }
+                }
+                
+                // Chỉnh sửa comment trực tiếp (inline)
+                function startInlineEditComment(commentId, button, dropdown) {
+                    console.log('=== startInlineEditComment START ===', { commentId, button, dropdown });
+                    
+                    if (!commentId) {
+                        console.error('Comment ID is required');
+                        alert('Không thể xác định bình luận để chỉnh sửa.');
+                        return;
+                    }
+                    
+                    // Hủy chỉnh sửa comment khác nếu đang chỉnh sửa
+                    if (currentEditingCommentId && currentEditingCommentId !== commentId) {
+                        console.log('Canceling previous edit for comment:', currentEditingCommentId);
+                        cancelInlineEditComment();
+                    }
+                    
+                    // Đóng menu dropdown
+                    if (dropdown) {
+                        dropdown.style.display = 'none';
+                        console.log('Dropdown menu closed');
+                    }
+                    
+                    // Tìm comment item - tìm parent có class class-comment-item (tránh tìm nhầm button)
+                    let commentItem = button.closest('.class-comment-item');
+                    console.log('commentItem from button.closest(.class-comment-item):', commentItem);
+                    
+                    // Nếu không tìm thấy, thử tìm bằng data-comment-id nhưng phải là .class-comment-item
+                    if (!commentItem) {
+                        const allCommentItems = commentsList.querySelectorAll('.class-comment-item');
+                        for (let item of allCommentItems) {
+                            if (item.getAttribute('data-comment-id') == commentId) {
+                                commentItem = item;
+                                break;
+                            }
+                        }
+                        console.log('commentItem from loop through .class-comment-item:', commentItem);
+                    }
+                    
+                    // Fallback: tìm bằng data-comment-id (nhưng không phải button)
+                    if (!commentItem) {
+                        const allWithId = commentsList.querySelectorAll('[data-comment-id]');
+                        for (let item of allWithId) {
+                            if (item.getAttribute('data-comment-id') == commentId && item.classList.contains('class-comment-item')) {
+                                commentItem = item;
+                                break;
+                            }
+                        }
+                        console.log('commentItem from fallback:', commentItem);
+                    }
+                    
+                    if (!commentItem) {
+                        console.error('Comment item not found for ID:', commentId, {
+                            availableComments: commentsList.querySelectorAll('.class-comment-item'),
+                            allWithId: commentsList.querySelectorAll('[data-comment-id]'),
+                            button: button,
+                            commentId: commentId
+                        });
+                        alert('Không tìm thấy bình luận để chỉnh sửa. Vui lòng thử lại.');
+                        return;
+                    }
+                    
+                    console.log('Comment item found:', commentItem);
+                    console.log('Comment item outerHTML:', commentItem.outerHTML);
+                    
+                    // Tìm comment text element - thử nhiều cách
+                    let commentTextElement = null;
+                    
+                    // Cách 1: Tìm trực tiếp .class-comment-content trong comment item
+                    commentTextElement = commentItem.querySelector('.class-comment-content');
+                    console.log('Step 1 - commentTextElement from .class-comment-content:', commentTextElement);
+                    
+                    // Cách 2: Tìm trong .class-comment-body
+                    if (!commentTextElement) {
+                        const commentBody = commentItem.querySelector('.class-comment-body');
+                        console.log('Step 2 - commentBody found:', commentBody);
+                        if (commentBody) {
+                            commentTextElement = commentBody.querySelector('.class-comment-content');
+                            console.log('Step 2 - commentTextElement from body.querySelector:', commentTextElement);
+                            
+                            // Nếu vẫn không tìm thấy, lấy div cuối cùng (không phải meta, không phải menu)
+                            if (!commentTextElement) {
+                                const allDivs = commentBody.querySelectorAll('div:not(.class-comment-meta):not(.class-comment-menu)');
+                                console.log('Step 2 - All divs in commentBody (excluding meta and menu):', allDivs);
+                                if (allDivs.length > 0) {
+                                    // Tìm div có text content
+                                    for (let div of allDivs) {
+                                        if (div.textContent && div.textContent.trim() && !div.querySelector('button')) {
+                                            commentTextElement = div;
+                                            console.log('Step 2 - Found text div:', commentTextElement);
+                                            break;
+                                        }
+                                    }
+                                    // Nếu không tìm thấy div có text, lấy div cuối cùng
+                                    if (!commentTextElement && allDivs.length > 0) {
+                                        commentTextElement = allDivs[allDivs.length - 1];
+                                        console.log('Step 2 - Using last div:', commentTextElement);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Cách 3: Tìm bất kỳ div nào chứa text (không phải meta, menu, hoặc có button)
+                    if (!commentTextElement) {
+                        const allTextDivs = commentItem.querySelectorAll('div:not(.class-comment-meta):not(.class-comment-menu)');
+                        console.log('Step 3 - All text divs:', allTextDivs);
+                        for (let div of allTextDivs) {
+                            // Bỏ qua div có chứa button hoặc là dropdown menu
+                            if (div.querySelector('button') || div.classList.contains('comment-menu-dropdown-modal')) {
+                                continue;
+                            }
+                            if (div.textContent && div.textContent.trim()) {
+                                commentTextElement = div;
+                                console.log('Step 3 - Found text div:', commentTextElement);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!commentTextElement) {
+                        console.error('Comment text element not found.', {
+                            commentItem: commentItem,
+                            commentItemHTML: commentItem.innerHTML,
+                            commentItemOuterHTML: commentItem.outerHTML,
+                            allDivs: commentItem.querySelectorAll('div'),
+                            commentBody: commentItem.querySelector('.class-comment-body')
+                        });
+                        alert('Không tìm thấy nội dung bình luận để chỉnh sửa. Vui lòng thử lại.');
+                        return;
+                    }
+                    
+                    console.log('Comment text element found:', commentTextElement);
+                    console.log('Comment text element textContent:', commentTextElement.textContent);
+                    console.log('Comment text element innerHTML:', commentTextElement.innerHTML);
+                    
+                    console.log('Comment text element found:', commentTextElement);
+                    
+                    // Lấy nội dung gốc - ưu tiên từ data attribute (đáng tin cậy hơn)
+                    originalCommentContent = '';
+                    
+                    // Thử lấy từ data attribute trước (đã được encode sẵn khi render)
+                    const encodedContent = button.getAttribute('data-comment-content');
+                    console.log('Encoded content from data attribute:', encodedContent);
+                    
+                    if (encodedContent && encodedContent.trim() !== '') {
+                        try {
+                            // Decode HTML entities - sử dụng textarea để decode an toàn hơn
+                            const tempTextarea = document.createElement('textarea');
+                            tempTextarea.innerHTML = encodedContent.replace(/&#10;/g, '\n');
+                            originalCommentContent = tempTextarea.value || tempTextarea.textContent || '';
+                            
+                            // Nếu vẫn không có, thử decode bằng cách khác
+                            if (!originalCommentContent || originalCommentContent.trim() === '') {
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = encodedContent.replace(/&#10;/g, '\n');
+                                originalCommentContent = tempDiv.textContent || tempDiv.innerText || '';
+                            }
+                            
+                            console.log('Decoded content from data attribute:', originalCommentContent);
+                        } catch (e) {
+                            console.error('Error decoding from data attribute:', e);
+                        }
+                    }
+                    
+                    // Nếu không có trong data attribute hoặc decode thất bại, thử lấy từ DOM
+                    if (!originalCommentContent || originalCommentContent.trim() === '') {
+                        if (commentTextElement) {
+                            // Thử lấy từ textContent trước (đơn giản và đáng tin cậy)
+                            originalCommentContent = commentTextElement.textContent || commentTextElement.innerText || '';
+                            console.log('Content from textContent:', originalCommentContent);
+                            
+                            // Nếu vẫn không có, thử từ innerHTML
+                            if ((!originalCommentContent || originalCommentContent.trim() === '') && commentTextElement.innerHTML) {
+                                // Chuyển HTML về text, giữ nguyên xuống dòng
+                                originalCommentContent = commentTextElement.innerHTML
+                                    .replace(/<br\s*\/?>/gi, '\n')
+                                    .replace(/<\/p>/gi, '\n')
+                                    .replace(/<p>/gi, '')
+                                    .replace(/<[^>]*>/g, '')
+                                    .replace(/&nbsp;/g, ' ')
+                                    .replace(/&amp;/g, '&')
+                                    .replace(/&lt;/g, '<')
+                                    .replace(/&gt;/g, '>')
+                                    .replace(/&#39;/g, "'")
+                                    .replace(/&quot;/g, '"')
+                                    .replace(/&#10;/g, '\n')
+                                    .trim();
+                                console.log('Content from innerHTML:', originalCommentContent);
+                            }
+                        }
+                    }
+                    
+                    // Đảm bảo có nội dung
+                    if (!originalCommentContent || originalCommentContent.trim() === '') {
+                        console.error('Could not extract comment content.', {
+                            button: button,
+                            commentItem: commentItem,
+                            commentTextElement: commentTextElement,
+                            encodedContent: encodedContent,
+                            commentItemHTML: commentItem ? commentItem.innerHTML : 'N/A'
+                        });
+                        alert('Không tìm thấy nội dung bình luận để chỉnh sửa. Vui lòng thử lại.');
+                        return;
+                    }
+                    
+                    console.log('Final comment content to edit:', originalCommentContent);
+                    
+                    // Tạo textarea để chỉnh sửa
+                    const textarea = document.createElement('textarea');
+                    textarea.className = 'comment-edit-textarea-modal';
+                    textarea.style.width = '100%';
+                    textarea.style.minHeight = '60px';
+                    textarea.style.padding = '8px';
+                    textarea.style.border = '1px solid #1976d2';
+                    textarea.style.borderRadius = '4px';
+                    textarea.style.fontSize = '0.875rem';
+                    textarea.style.fontFamily = 'inherit';
+                    textarea.style.resize = 'vertical';
+                    textarea.style.marginTop = '4px';
+                    textarea.value = originalCommentContent;
+                    
+                    // Tạo các nút hành động
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'comment-edit-actions-modal';
+                    actionsDiv.style.display = 'flex';
+                    actionsDiv.style.gap = '8px';
+                    actionsDiv.style.marginTop = '8px';
+                    actionsDiv.style.justifyContent = 'flex-end';
+                    
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.type = 'button';
+                    cancelBtn.className = 'comment-edit-cancel-btn-modal';
+                    cancelBtn.textContent = 'Huỷ';
+                    cancelBtn.style.padding = '6px 16px';
+                    cancelBtn.style.border = '1px solid #dadce0';
+                    cancelBtn.style.borderRadius = '4px';
+                    cancelBtn.style.background = 'white';
+                    cancelBtn.style.color = '#5f6368';
+                    cancelBtn.style.cursor = 'pointer';
+                    cancelBtn.style.fontSize = '0.875rem';
+                    cancelBtn.onclick = () => cancelInlineEditComment();
+                    
+                    const saveBtn = document.createElement('button');
+                    saveBtn.type = 'button';
+                    saveBtn.className = 'comment-edit-save-btn-modal';
+                    saveBtn.textContent = 'Lưu';
+                    saveBtn.style.padding = '6px 16px';
+                    saveBtn.style.border = 'none';
+                    saveBtn.style.borderRadius = '4px';
+                    saveBtn.style.background = '#1976d2';
+                    saveBtn.style.color = 'white';
+                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.style.fontSize = '0.875rem';
+                    saveBtn.onclick = () => saveInlineEditComment(commentId);
+                    
+                    actionsDiv.appendChild(cancelBtn);
+                    actionsDiv.appendChild(saveBtn);
+                    
+                    // Thay thế comment text bằng textarea
+                    commentTextElement.style.display = 'none';
+                    
+                    // Insert textarea và actionsDiv sau commentTextElement
+                    const parentElement = commentTextElement.parentNode;
+                    if (parentElement) {
+                        // Insert textarea ngay sau commentTextElement
+                        if (commentTextElement.nextSibling) {
+                            parentElement.insertBefore(textarea, commentTextElement.nextSibling);
+                        } else {
+                            parentElement.appendChild(textarea);
+                        }
+                        
+                        // Insert actionsDiv ngay sau textarea
+                        if (textarea.nextSibling) {
+                            parentElement.insertBefore(actionsDiv, textarea.nextSibling);
+                        } else {
+                            parentElement.appendChild(actionsDiv);
+                        }
+                        
+                        console.log('Textarea and actions inserted successfully');
+                    } else {
+                        console.error('Parent element not found');
+                        alert('Không thể tìm thấy vị trí để hiển thị form chỉnh sửa.');
+                        return;
+                    }
+                    
+                    currentEditingCommentId = commentId;
+                    console.log('Inline edit started for comment ID:', commentId);
+                    
+                    // Ẩn menu chỉnh sửa khi đang chỉnh sửa
+                    const editBtn = commentItem.querySelector('.comment-edit-btn-modal');
+                    if (editBtn) {
+                        editBtn.style.display = 'none';
+                    }
+                    
+                    // Focus vào textarea
+                    setTimeout(() => {
+                        textarea.focus();
+                        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                    }, 50);
+                }
+                
+                function cancelInlineEditComment() {
+                    if (!currentEditingCommentId) return;
+                    
+                    const commentItem = commentsList.querySelector(`[data-comment-id="${currentEditingCommentId}"]`);
+                    if (!commentItem) {
+                        currentEditingCommentId = null;
+                        originalCommentContent = null;
+                        return;
+                    }
+                    
+                    // Xóa textarea và actions
+                    const textarea = commentItem.querySelector('.comment-edit-textarea-modal');
+                    const actionsDiv = commentItem.querySelector('.comment-edit-actions-modal');
+                    
+                    if (textarea) textarea.remove();
+                    if (actionsDiv) actionsDiv.remove();
+                    
+                    // Hiển thị lại comment text
+                    const commentTextElement = commentItem.querySelector('.class-comment-content');
+                    if (commentTextElement) {
+                        commentTextElement.style.display = '';
+                    }
+                    
+                    // Hiển thị lại nút chỉnh sửa
+                    const editBtn = commentItem.querySelector('.comment-edit-btn-modal');
+                    if (editBtn) {
+                        editBtn.style.display = 'block';
+                    }
+                    
+                    currentEditingCommentId = null;
+                    originalCommentContent = null;
+                }
+                
+                async function saveInlineEditComment(commentId) {
+                    if (!commentId) return;
+                    
+                    const commentItem = commentsList.querySelector(`[data-comment-id="${commentId}"]`);
+                    if (!commentItem) {
+                        showErrorModal('Không tìm thấy bình luận để cập nhật.');
+                        return;
+                    }
+                    
+                    const textarea = commentItem.querySelector('.comment-edit-textarea-modal');
+                    if (!textarea) {
+                        cancelInlineEditComment();
+                        return;
+                    }
+                    
+                    const newContent = textarea.value.trim();
+                    if (!newContent) {
+                        alert('Nội dung nhận xét không được để trống.');
+                        return;
+                    }
+                    
+                    try {
+                        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                        const token = tokenInput ? tokenInput.value : '';
+                        
+                        if (!token) {
+                            alert('Không tìm thấy token bảo mật. Vui lòng tải lại trang.');
+                            return;
+                        }
+                        
+                        const formData = new FormData();
+                        formData.append('id', commentId);
+                        formData.append('content', newContent);
+                        formData.append('__RequestVerificationToken', token);
+                        
+                        // Disable buttons while saving
+                        const saveBtn = commentItem.querySelector('.comment-edit-save-btn-modal');
+                        const cancelBtn = commentItem.querySelector('.comment-edit-cancel-btn-modal');
+                        if (saveBtn) saveBtn.disabled = true;
+                        if (cancelBtn) cancelBtn.disabled = true;
+                        
+                        const response = await fetch(urls.update, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            alert('Không thể kết nối đến server. Vui lòng thử lại.');
+                            if (saveBtn) saveBtn.disabled = false;
+                            if (cancelBtn) cancelBtn.disabled = false;
+                            return;
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            // Xóa textarea và actions
+                            if (textarea) textarea.remove();
+                            const actionsDiv = commentItem.querySelector('.comment-edit-actions-modal');
+                            if (actionsDiv) actionsDiv.remove();
+                            
+                            // Cập nhật nội dung comment
+                            const commentTextElement = commentItem.querySelector('.class-comment-content');
+                            if (commentTextElement) {
+                                // Giữ nguyên định dạng xuống dòng
+                                const formattedContent = result.content.replace(/\n/g, '<br>');
+                                commentTextElement.innerHTML = formattedContent;
+                                commentTextElement.style.display = '';
+                            }
+                            
+                            // Hiển thị lại nút chỉnh sửa và cập nhật data attribute
+                            const editBtn = commentItem.querySelector('.comment-edit-btn-modal');
+                            if (editBtn) {
+                                editBtn.style.display = 'block';
+                                const tempTextarea = document.createElement('textarea');
+                                tempTextarea.textContent = result.content;
+                                editBtn.setAttribute('data-comment-content', tempTextarea.innerHTML.replace(/"/g, '&quot;').replace(/\n/g, '&#10;'));
+                            }
+                            
+                            // Cập nhật commentsData
+                            const commentIndex = commentsData.findIndex(c => c.id === commentId);
+                            if (commentIndex !== -1) {
+                                commentsData[commentIndex].content = result.content;
+                            }
+                            
+                            currentEditingCommentId = null;
+                            originalCommentContent = null;
+                        } else {
+                            alert(result.error || 'Có lỗi xảy ra khi cập nhật nhận xét.');
+                            if (saveBtn) saveBtn.disabled = false;
+                            if (cancelBtn) cancelBtn.disabled = false;
+                        }
+                    } catch (error) {
+                        console.error('Error editing comment:', error);
+                        alert('Có lỗi xảy ra khi cập nhật nhận xét. Vui lòng thử lại.');
+                        const saveBtn = commentItem.querySelector('.comment-edit-save-btn-modal');
+                        const cancelBtn = commentItem.querySelector('.comment-edit-cancel-btn-modal');
+                        if (saveBtn) saveBtn.disabled = false;
+                        if (cancelBtn) cancelBtn.disabled = false;
+                    }
+                }
+                
+                function openDeleteCommentModal(commentId, button, dropdown) {
+                    // Lưu commentId và tìm commentItem ngay lập tức
+                    pendingDeleteCommentId = commentId;
+                    pendingDeleteButton = button;
+                    pendingDeleteDropdown = dropdown;
+                    
+                    // Đóng menu xóa
+                    if (dropdown) {
+                        dropdown.style.display = 'none';
+                    }
+                    
+                    // Hiển thị modal xác nhận
+                    if (deleteCommentModal) {
+                        deleteCommentModal.style.display = 'flex';
+                    }
+                }
+                
+                function closeDeleteCommentModal() {
+                    if (deleteCommentModal) {
+                        deleteCommentModal.style.display = 'none';
+                    }
+                    pendingDeleteCommentId = null;
+                    pendingDeleteButton = null;
+                    pendingDeleteDropdown = null;
+                }
+                
+                async function performDeleteComment() {
+                    if (!pendingDeleteCommentId) return;
+                    
+                    // Tìm commentItem bằng commentId
+                    const commentItem = commentsList.querySelector(`[data-comment-id="${pendingDeleteCommentId}"]`);
+                    if (!commentItem) {
+                        alert('Không tìm thấy bình luận để xóa.');
+                        closeDeleteCommentModal();
+                        // Reload lại danh sách comments để đồng bộ
+                        loadComments();
+                        return;
+                    }
+                    
+                    try {
+                        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                        const token = tokenInput ? tokenInput.value : '';
+                        
+                        if (!token) {
+                            alert('Không tìm thấy token bảo mật. Vui lòng tải lại trang.');
+                            closeDeleteCommentModal();
+                            return;
+                        }
+                        
+                        const formData = new FormData();
+                        formData.append('id', pendingDeleteCommentId);
+                        formData.append('__RequestVerificationToken', token);
+                        
+                        const response = await fetch(urls.delete, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            // Đóng modal xác nhận ngay lập tức trước khi xóa comment
+                            closeDeleteCommentModal();
+                            
+                            // Tìm lại commentItem ngay sau khi đóng modal để đảm bảo tìm đúng
+                            const commentToDelete = commentsList.querySelector(`[data-comment-id="${pendingDeleteCommentId}"]`);
+                            
+                            if (commentToDelete) {
+                                // Xóa bình luận ngay lập tức với hiệu ứng fade out
+                                commentToDelete.style.transition = 'opacity 0.3s';
+                                commentToDelete.style.opacity = '0';
+                                setTimeout(() => {
+                                    commentToDelete.remove();
+                                    
+                                    // Kiểm tra nếu không còn bình luận nào
+                                    const remainingComments = commentsList.querySelectorAll('[data-comment-id]');
+                                    if (remainingComments.length === 0) {
+                                        commentsEmpty.style.display = 'block';
+                                    } else {
+                                        commentsEmpty.style.display = 'none';
+                                    }
+                                    
+                                    // Cập nhật label bên ngoài modal
+                                    if (currentTrigger) {
+                                        const label = currentTrigger.querySelector('[data-comment-label]');
+                                        if (label) {
+                                            const remainingCount = remainingComments.length;
+                                            label.textContent = remainingCount > 0
+                                                ? `${remainingCount} nhận xét về lớp`
+                                                : 'Thêm nhận xét về lớp';
+                                        }
+                                    }
+                                }, 300);
+                            } else {
+                                // Nếu không tìm thấy commentItem, reload lại danh sách để đồng bộ
+                                loadComments();
+                            }
+                        } else {
+                            alert(result.error || 'Có lỗi xảy ra khi xóa bình luận.');
+                            closeDeleteCommentModal();
+                        }
+                    } catch (error) {
+                        console.error('Error deleting comment:', error);
+                        alert('Có lỗi xảy ra khi xóa bình luận. Vui lòng thử lại.');
+                        closeDeleteCommentModal();
+                    }
+                }
+
+                function loadComments() {
+                    if (!urls.list || !currentContext) return;
+                    const params = new URLSearchParams({
+                        classId,
+                        entityType: currentContext.type,
+                        entityId: currentContext.id
+                    });
+                    fetch(`${urls.list}?${params}`)
+                        .then(res => res.ok ? res.json() : Promise.reject())
+                        .then(data => {
+                            if (!data.success) throw new Error();
+                            renderComments(data.data || []);
+                        })
+                        .catch(() => showErrorModal('Không thể tải nhận xét. Vui lòng thử lại.'));
+                }
+                
+                // Đóng menu khi click bên ngoài
+                document.addEventListener('click', function(e) {
+                    const clickedInDropdown = e.target.closest('.comment-menu-dropdown-modal');
+                    const clickedOnMenuBtn = e.target.closest('.comment-menu-btn-modal');
+                    const clickedOnDeleteBtn = e.target.closest('.comment-delete-btn-modal');
+                    const clickedOnEditBtn = e.target.closest('.comment-edit-btn-modal');
+                    
+                    // Nếu click vào nút xóa hoặc chỉnh sửa, không đóng menu (để modal/xử lý có thể chạy)
+                    if (clickedOnDeleteBtn || clickedOnEditBtn) {
+                        return;
+                    }
+                    
+                    // Nếu click vào menu button, không đóng menu (toggle sẽ xử lý)
+                    if (clickedOnMenuBtn) {
+                        return;
+                    }
+                    
+                    // Chỉ đóng menu nếu click bên ngoài menu và dropdown
+                    if (!clickedInDropdown && !e.target.closest('.class-comment-menu')) {
+                        document.querySelectorAll('.comment-menu-dropdown-modal').forEach(menu => {
+                            menu.style.display = 'none';
+                        });
+                    }
+                });
+                
+                // Event listeners cho modal xác nhận xóa comment
+                if (confirmDeleteCommentBtn) {
+                    confirmDeleteCommentBtn.addEventListener('click', performDeleteComment);
+                }
+                
+                if (cancelDeleteCommentBtn) {
+                    cancelDeleteCommentBtn.addEventListener('click', closeDeleteCommentModal);
+                }
+                
+                if (closeDeleteCommentModalBtn) {
+                    closeDeleteCommentModalBtn.addEventListener('click', closeDeleteCommentModal);
+                }
+                
+                if (deleteCommentModal) {
+                    deleteCommentModal.addEventListener('click', function(e) {
+                        if (e.target === deleteCommentModal) {
+                            closeDeleteCommentModal();
+                        }
+                    });
+                }
+
+                function openCommentsModal(trigger, type, id, title) {
+                    currentTrigger = trigger;
+                    currentContext = { type, id };
+                    if (commentsTitle) commentsTitle.textContent = title || 'Nhận xét của lớp học';
+                    commentsModal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    loadComments();
+                    toggleCommentSubmit();
+                }
+
+                function closeCommentsModal() {
+                    // Hủy chỉnh sửa nếu đang chỉnh sửa
+                    if (currentEditingCommentId) {
+                        cancelInlineEditComment();
+                    }
+                    
+                    commentsModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                    currentContext = null;
+                    currentTrigger = null;
+                    if (commentInput) {
+                        commentInput.value = '';
+                        toggleCommentSubmit();
+                    }
+                }
+
+                document.addEventListener('click', function(e) {
+                    const trigger = e.target.closest('[data-comments-trigger]');
+                    if (trigger) {
+                        const type = trigger.getAttribute('data-type');
+                        const id = trigger.getAttribute('data-id');
+                        const title = trigger.getAttribute('data-title');
+                        if (type && id) {
+                            openCommentsModal(trigger, type, id, title);
+                        }
+                        return;
+                    }
+
+                    if (e.target === commentsModal) {
+                        closeCommentsModal();
+                    }
+                });
+
+                closeCommentsModalBtn?.addEventListener('click', closeCommentsModal);
+
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        // Nếu đang chỉnh sửa comment, hủy chỉnh sửa
+                        if (currentEditingCommentId) {
+                            cancelInlineEditComment();
+                            e.preventDefault();
+                        } 
+                        // Nếu modal đang mở và không đang chỉnh sửa, đóng modal
+                        else if (commentsModal.style.display === 'flex') {
+                            closeCommentsModal();
+                        }
+                    }
+                });
+
+                commentInput?.addEventListener('input', toggleCommentSubmit);
+
+                commentForm?.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    if (!currentContext || !urls.create || !commentInput) return;
+                    const content = commentInput.value.trim();
+                    if (!content) return;
+
+                    const formData = new FormData(commentForm);
+                    formData.append('classId', classId);
+                    formData.append('entityType', currentContext.type);
+                    formData.append('entityId', currentContext.id);
+                    formData.set('content', content);
+
+                    commentSubmitBtn.disabled = true;
+
+                    fetch(urls.create, {
+                        method: 'POST',
+                        body: formData
+                    })
+                        .then(res => res.ok ? res.json() : Promise.reject())
+                        .then(data => {
+                            if (!data.success) throw new Error(data.error || 'Không thể gửi nhận xét.');
+                            commentInput.value = '';
+                            toggleCommentSubmit();
+                            loadComments();
+                        })
+                        .catch((err) => {
+                            toggleCommentSubmit();
+                            showErrorModal(err?.message || 'Không thể gửi nhận xét. Vui lòng thử lại.');
+                        });
+                });
+            })();
+        });
+
+        // Handle click on assignment cards to navigate to assignment details
+        document.addEventListener('click', function(e) {
+            const assignmentCard = e.target.closest('.class-details-post-card--assignment');
+            if (!assignmentCard) return;
+
+            // Don't navigate if clicking on links, buttons, or interactive elements
+            if (e.target.closest('a, button, .post-menu, .post-menu-dropdown, .attachment-link')) {
+                return;
+            }
+
+            const assignmentUrl = assignmentCard.getAttribute('data-assignment-url');
+            if (assignmentUrl) {
+                window.location.href = assignmentUrl;
+            }
+        });
+
+        // Handle assignment link clicks in gradebook (Điểm số tab)
+        document.querySelectorAll('.class-assignment-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const assignmentId = this.getAttribute('data-assignment-id');
+                // Lưu tab vào sessionStorage để tự động mở tab "Bài tập" (mô tả chi tiết)
+                sessionStorage.setItem('assignmentActiveTab', 'instructions');
+                // Xóa studentId nếu có (vì đang click vào tên bài tập, không phải điểm số)
+                sessionStorage.removeItem('assignmentSelectedStudentId');
+                window.location.href = '@Url.Action("Details", "Assignments")' + '?id=' + assignmentId;
+            });
+        });
+
+        // Handle grade score link clicks - khi click vào điểm số
+        document.querySelectorAll('.grade-score-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const assignmentId = this.getAttribute('data-assignment-id');
+                const studentId = this.getAttribute('data-student-id');
+                // Lưu tab và studentId vào sessionStorage
+                sessionStorage.setItem('assignmentActiveTab', 'submissions');
+                sessionStorage.setItem('assignmentSelectedStudentId', studentId);
+                window.location.href = '@Url.Action("Details", "Assignments")' + '?id=' + assignmentId;
+            });
+        });
+    </script>
+}
+

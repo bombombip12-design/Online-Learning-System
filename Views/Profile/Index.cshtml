@@ -1,0 +1,168 @@
+﻿@model FinalASB.ViewModels.ProfileViewModel
+@{
+    ViewData["Title"] = "My Profile";
+    Layout = "_DashboardLayout";
+}
+
+<div class="profile-container">
+    <div class="profile-header">
+        <h2><i class="fas fa-user-circle me-2"></i> Hồ sơ của tôi</h2>
+    </div>
+
+    <div class="profile-content">
+        <form asp-action="Update" method="post" enctype="multipart/form-data" class="profile-form">
+            @Html.AntiForgeryToken()
+            
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle me-2"></i>
+                    @TempData["SuccessMessage"]
+                </div>
+            }
+
+            <div class="profile-section">
+                <h3 class="section-title"> Avatar </h3>
+                <div class="avatar-upload-section">
+                    <div class="avatar-preview">
+                        @if (!string.IsNullOrEmpty(Model.AvatarUrl))
+                        {
+                            <img src="@Model.AvatarUrl" alt="Avatar" id="avatarPreview" class="avatar-image" />
+                        }
+                        else
+                        {
+                            <div class="avatar-placeholder" id="avatarPreview">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        }
+                    </div>
+                    <div class="avatar-upload-controls">
+                        <label for="avatarFile" class="btn btn-outline-primary">
+                            <i class="fas fa-upload me-2"></i> Chọn ảnh
+                        </label>
+                        <input type="file" id="avatarFile" name="AvatarFile" accept="image/*" class="d-none" />
+
+                        <p class="avatar-hint">Chấp nhận: JPG, PNG, GIF (max 5MB)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h3 class="section-title">Thông tin cá nhân</h3>
+                <div class="form-group">
+                    <label asp-for="FullName" class="form-label">
+                        <i class="fas fa-user me-2"></i>Tên hiển thị
+                    </label>
+                    <input asp-for="FullName" class="form-control" placeholder="Input displayname" />
+                    <span asp-validation-for="FullName" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-envelope me-2"></i>Email
+                    </label>
+                    <div class="email-display">
+                        <input type="text" value="@Model.Email" class="form-control" readonly />
+                        <span class="email-status">
+                            @if (Model.IsEmailVerified)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i> Verified
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-exclamation-circle me-1"></i> Chưa xác minh
+                                </span>
+                            }
+                        </span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-calendar me-2"></i> Ngày tạo
+                    </label>
+                    <input type="text" value="@Model.CreatedAt.ToString("dd/MM/yyyy HH:mm")" class="form-control" readonly />
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h3 class="section-title">Đổi mật khẩu</h3>
+                <div class="form-group">
+                    <label asp-for="OldPassword" class="form-label">
+                        <i class="fas fa-lock me-2"></i> Mật khẩu cũ
+                    </label>
+                    <input type="password" asp-for="OldPassword" class="form-control" placeholder="Enter your old password" />
+                    <span asp-validation-for="OldPassword" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label asp-for="NewPassword" class="form-label">
+                        <i class="fas fa-lock me-2"></i> Mật khẩu mới
+                    </label>
+                    <input type="password" asp-for="NewPassword" class="form-control" placeholder="Enter a new password (minimum 6 characters)" />
+                    <span asp-validation-for="NewPassword" class="text-danger"></span>
+                </div>
+
+                <div class="form-group">
+                    <label asp-for="ConfirmPassword" class="form-label">
+                        <i class="fas fa-lock me-2"></i> Xác nhận mật khẩu
+                    </label>
+                    <input type="password" asp-for="ConfirmPassword" class="form-control" placeholder="Re-enter new password" />
+                    <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save me-2"></i> Lưu thay đổi
+                </button>
+                <a href="@Url.Action("Index", "Home")" class="btn btn-outline-secondary btn-lg">
+                    <i class="fas fa-times me-2"></i> Quay lại
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        // Avatar preview
+        document.getElementById('avatarFile')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('avatarPreview');
+                    if (preview.tagName === 'IMG') {
+                        preview.src = e.target.result;
+                    } else {
+                        // Replace placeholder with image
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = 'Avatar';
+                        img.className = 'avatar-image';
+                        img.id = 'avatarPreview';
+                        preview.parentNode.replaceChild(img, preview);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Reload avatar in topbar after successful update
+        @if (TempData["AvatarUpdated"] != null && TempData["AvatarUpdated"].ToString() == "true")
+        {
+            <text>
+            // Reload the page to update avatar in topbar
+            setTimeout(function() {
+                location.reload();
+            }, 500);
+            </text>
+        }
+    </script>
+}
+

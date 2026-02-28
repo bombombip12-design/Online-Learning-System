@@ -1,0 +1,13 @@
+@model FinalASB.ViewComponents.UserAvatarViewModel
+
+<div class="avatar-circle" id="topbarAvatar">
+    @if (!string.IsNullOrEmpty(Model.AvatarUrl))
+    {
+        <img src="@Model.AvatarUrl" alt="Avatar" class="avatar-circle-img" />
+    }
+    else
+    {
+        <span>@Model.Initials</span>
+    }
+</div>
+

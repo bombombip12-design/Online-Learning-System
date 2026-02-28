@@ -1,0 +1,93 @@
+@model List<Class>
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "Class Management";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-file-earmark-text me-2"></i>Chọn lớp để xem bài tập</h2>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size: 1.1rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-bookmark me-2"></i>Tên lớp
+                        </th>
+                        <th style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-person-badge me-2"></i>Chủ lớp
+                        </th>
+                        <th class="text-center" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-info-circle me-2"></i>Trạng thái
+                        </th>
+                        <th class="text-center" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-gear me-2"></i>Hành động
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model != null && Model.Any())
+                    {
+                        @foreach (var c in Model)
+                        {
+                            <tr style="vertical-align: middle;">
+                                <td class="ps-4 fw-semibold" style="padding: 1.25rem 2rem; font-size: 1.1rem;">@c.ClassName</td>
+                                <td style="padding: 1.25rem 2rem; font-size: 1.1rem;">
+                                    @* Giả định c.Owner đã được Include trong Controller *@
+                                    @if (c.Owner != null)
+                                    {
+                                        <span>@c.Owner.FullName</span>
+                                    }
+                                </td>
+                                <td class="text-center" style="padding: 1.25rem 2rem;">
+                                    @* Hiển thị trạng thái *@
+                                    @if (!string.IsNullOrEmpty(c.Status))
+                                    {
+                                        <span class="badge @(c.Status == "Active" ? "bg-success" : "bg-secondary")" style="font-size: 1rem; padding: 0.5rem 0.75rem;">@c.Status</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary" style="font-size: 1rem; padding: 0.5rem 0.75rem;">Non-active</span>
+                                    }
+                                </td>
+                                <td class="text-center" style="padding: 1.25rem 2rem;">
+                                    <div class="btn-group" role="group">
+                                        <a href="/AdminClasses/ClassFullDetails/@c.Id" class="btn btn-primary" title="Xem chi tiết lớp" style="padding: 0.5rem 0.75rem; font-size: 1.1rem;">
+                                            <i class="bi bi-eye-fill me-1"></i>Xem chi tiết
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">Không tìm thấy lớp học nào để xem bài tập.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('form');
+            const select = document.getElementById('classId');
+
+            form.addEventListener('submit', function (e) {
+                if (!select.value || select.value === '') {
+                    e.preventDefault();
+                    alert('Vui lòng chọn lớp học!');
+                    return false;
+                }
+            });
+        });
+    </script>
+}

@@ -1,0 +1,307 @@
+@model FinalASB.Models.Assignment
+@using FinalASB.Models
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = $"Chi tiết bài tập: {Model.Title}";
+    
+    var allSubmissions = ViewBag.AllSubmissions as List<Submission> ?? new List<Submission>();
+    var assignmentComments = Model.Comments?.Where(c => !c.IsPrivate).OrderByDescending(c => c.CreatedAt).ToList() ?? new List<Comment>();
+}
+
+<div style="margin: -2rem -2rem 2rem -2rem; padding: 2rem; background: white; border-bottom: 1px solid #e2e8f0;">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-journal-text me-2"></i>@Model.Title</h2>
+            <p class="text-muted mb-0">
+                Lớp: <strong>@Model.Class.ClassName</strong> | 
+                Giáo viên: <strong>@Model.Creator.FullName</strong> | 
+                Ngày tạo: @Model.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+            </p>
+        </div>
+        <a href="/AdminClasses/ClassFullDetails/@Model.ClassId" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Quay lại
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 flex-nowrap" style="margin-left: -2rem; margin-right: -2rem; padding-left: 2rem; padding-right: 2rem; width: calc(100% + 4rem);">
+    <!-- Column 1: Assignment Information (Widest) -->
+    <div style="flex: 0 0 45%; max-width: 45%;">
+        <div class="card border-0 shadow-sm" style="height: calc(100vh - 300px); min-height: 600px; overflow-y: auto;">
+            <div class="card-header bg-primary text-white sticky-top">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Thông tin bài tập</h5>
+            </div>
+            <div class="card-body">
+                @if (Model.DueDate.HasValue)
+                {
+                    <div class="mb-3">
+                        <strong>Hạn nộp:</strong>
+                        <span class="badge @(Model.DueDate.Value < DateTime.Now ? "bg-danger" : "bg-warning text-dark") ms-2">
+                            @Model.DueDate.Value.ToString("dd/MM/yyyy HH:mm")
+                        </span>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <strong>Hạn nộp:</strong>
+                        <span class="text-muted ms-2">Không giới hạn</span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    <div class="mb-3">
+                        <strong>Mô tả:</strong>
+                        <div class="mt-2 p-3 bg-light rounded">
+                            @Html.Raw(Model.Description.Replace("\n", "<br>"))
+                        </div>
+                    </div>
+                }
+
+                <!-- Attachments Section -->
+                @if (Model.Attachments != null && Model.Attachments.Any())
+                {
+                    <div class="mb-3">
+                        <strong>Tệp đính kèm:</strong>
+                        <div class="mt-2">
+                            @foreach (var attachment in Model.Attachments)
+                            {
+                                @if (attachment.Type == "YouTube")
+                                {
+                                    <div class="mb-2 p-2 bg-light rounded">
+                                        <div class="d-flex align-items-center flex-wrap">
+                                            <i class="bi bi-youtube text-danger me-2" style="font-size: 1.5rem;"></i>
+                                            <div class="flex-grow-1" style="min-width: 200px;">
+                                                <div class="fw-bold small">@(!string.IsNullOrEmpty(attachment.Title) ? attachment.Title : "YouTube Video")</div>
+                                                <a href="@attachment.Url" target="_blank" class="text-primary text-decoration-none" style="font-size: 0.85rem; word-break: break-all;">
+                                                    @attachment.Url
+                                                </a>
+                                            </div>
+                                            <a href="@attachment.Url" target="_blank" class="btn btn-sm btn-outline-danger mt-2 mt-sm-0">
+                                                <i class="bi bi-box-arrow-up-right me-1"></i>Mở
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                                else if (attachment.Type == "Link")
+                                {
+                                    <div class="mb-2 p-2 bg-light rounded">
+                                        <div class="d-flex align-items-center flex-wrap">
+                                            <i class="bi bi-link-45deg text-primary me-2" style="font-size: 1.5rem;"></i>
+                                            <div class="flex-grow-1" style="min-width: 200px;">
+                                                <div class="fw-bold small">@attachment.Title</div>
+                                                <a href="@attachment.Url" target="_blank" class="text-primary text-decoration-none" style="font-size: 0.85rem; word-break: break-all;">
+                                                    @attachment.Url
+                                                </a>
+                                            </div>
+                                            <a href="@attachment.Url" target="_blank" class="btn btn-sm btn-outline-primary mt-2 mt-sm-0">
+                                                <i class="bi bi-box-arrow-up-right me-1"></i>Mở
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                                else if (attachment.Type == "File")
+                                {
+                                    <div class="mb-2 p-2 bg-light rounded">
+                                        <div class="d-flex align-items-center flex-wrap">
+                                            <i class="bi bi-file-earmark text-info me-2" style="font-size: 1.5rem;"></i>
+                                            <div class="flex-grow-1" style="min-width: 200px;">
+                                                <div class="fw-bold small">@attachment.FileName</div>
+                                                <small class="text-muted">Tệp đính kèm</small>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(attachment.Url))
+                                            {
+                                                <a href="@attachment.Url" target="_blank" class="btn btn-sm btn-outline-info mt-2 mt-sm-0">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i>Mở
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Class Comments Section -->
+                <div class="mt-4 pt-3 border-top">
+                    <h6 class="mb-3">
+                        <i class="bi bi-chat-dots me-2"></i>Nhận xét của lớp học
+                    </h6>
+                    <div id="assignmentCommentsList">
+                        @if (assignmentComments.Any())
+                        {
+                            @foreach (var comment in assignmentComments)
+                            {
+                                <div class="mb-3 p-2 bg-light rounded">
+                                    <div class="d-flex align-items-start">
+                                        <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2 text-primary fw-bold" style="min-width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">
+                                            @comment.User.FullName.First()
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-bold small">@comment.User.FullName</div>
+                                            <div class="text-muted" style="font-size: 0.8rem;">@comment.CreatedAt.ToString("dd/MM/yyyy HH:mm")</div>
+                                            <div class="mt-1" style="font-size: 0.9rem;">@comment.Content</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-muted text-center py-3 small">Chưa có nhận xét nào.</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Column 2: Student Submissions (Middle) - Rectangle shape -->
+    <div style="flex: 0 0 38%; max-width: 38%;">
+        <div class="card border-0 shadow-sm" style="height: calc(100vh - 300px); min-height: 600px; overflow-y: auto;">
+            <div class="card-header bg-success text-white sticky-top">
+                <h5 class="mb-0"><i class="bi bi-people me-2"></i>Bài nộp của học sinh</h5>
+            </div>
+            <div class="card-body">
+                @if (allSubmissions.Any())
+                {
+                    @foreach (var submission in allSubmissions)
+                    {
+                        // Admin can see all private comments - no filtering needed
+                        var submissionPrivateComments = submission.Comments?.Where(c => c.IsPrivate).OrderByDescending(c => c.CreatedAt).ToList() ?? new List<Comment>();
+                        var assignmentPrivateComments = Model.Comments?.Where(c => c.IsPrivate && (c.SubmissionId == submission.Id || (c.AssignmentId == Model.Id && (c.UserId == submission.StudentId || c.UserId == Model.CreatedBy)))).OrderByDescending(c => c.CreatedAt).ToList() ?? new List<Comment>();
+                        var allPrivateCommentsForStudent = submissionPrivateComments.Union(assignmentPrivateComments).OrderByDescending(c => c.CreatedAt).ToList();
+
+                        <div class="border rounded p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-start mb-2 pb-2 border-bottom">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1" style="font-size: 1rem;">@submission.Student.FullName</h6>
+                                    <div class="text-muted" style="font-size: 0.75rem;">
+                                        <i class="bi bi-calendar me-1"></i>@submission.SubmittedAt.ToString("dd/MM/yyyy HH:mm")
+                                    </div>
+                                </div>
+                                <div>
+                                    @if (submission.Score.HasValue)
+                                    {
+                                        <span class="badge bg-success" style="font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+                                            @submission.Score
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark" style="font-size: 0.85rem; padding: 0.4rem 0.6rem;">
+                                            Chưa chấm
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Submission Files -->
+                            @if (submission.Attachments != null && submission.Attachments.Any())
+                            {
+                                <div class="mb-2">
+                                    <strong style="font-size: 0.85rem;"><i class="bi bi-file-earmark me-1"></i>File:</strong>
+                                    <div class="mt-1">
+                                        @foreach (var attachment in submission.Attachments)
+                                        {
+                                            var displayTitle = !string.IsNullOrWhiteSpace(attachment.Title) ? attachment.Title : (attachment.FileName ?? "Tệp đính kèm");
+                                            <div class="d-flex align-items-center justify-content-between p-1 bg-light rounded mb-1">
+                                                @if (!string.IsNullOrEmpty(attachment.Url))
+                                                {
+                                                    <a href="@attachment.Url" target="_blank" class="text-decoration-none text-primary" style="font-size: 0.8rem;">
+                                                        <i class="@(attachment.Type == "Link" ? "bi bi-link-45deg" : "bi bi-file-earmark") me-1"></i>@(displayTitle.Length > 30 ? displayTitle.Substring(0, 30) + "..." : displayTitle)
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted" style="font-size: 0.8rem;">
+                                                        <i class="bi bi-file-earmark me-1"></i>@(displayTitle.Length > 30 ? displayTitle.Substring(0, 30) + "..." : displayTitle)
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Teacher Comment -->
+                            @if (!string.IsNullOrEmpty(submission.TeacherComment))
+                            {
+                                <div class="mb-2 p-2 bg-warning bg-opacity-10 rounded border-start border-warning border-3">
+                                    <strong style="font-size: 0.85rem;"><i class="bi bi-chat-quote me-1"></i>Nhận xét:</strong>
+                                    <p class="mb-0 mt-1" style="font-size: 0.85rem;">@submission.TeacherComment</p>
+                                </div>
+                            }
+
+                            <!-- Private Comments -->
+                            @if (allPrivateCommentsForStudent.Any())
+                            {
+                                <div class="mt-2 pt-2 border-top">
+                                    <h6 class="mb-2" style="font-size: 0.85rem;">
+                                        <i class="bi bi-shield-lock me-1"></i>Nhận xét riêng tư
+                                    </h6>
+                                    <div class="private-comments-list">
+                                        @foreach (var comment in allPrivateCommentsForStudent.Take(3))
+                                        {
+                                            <div class="mb-1 p-1 bg-light rounded">
+                                                <div class="d-flex align-items-start">
+                                                    <div class="bg-secondary bg-opacity-10 rounded-circle p-1 me-1 text-secondary fw-bold" style="min-width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem;">
+                                                        @comment.User.FullName.First()
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <div class="fw-bold" style="font-size: 0.75rem;">@comment.User.FullName</div>
+                                                        <div class="text-muted" style="font-size: 0.7rem;">@comment.CreatedAt.ToString("dd/MM HH:mm")</div>
+                                                        <div class="mt-1" style="font-size: 0.8rem;">@comment.Content</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (allPrivateCommentsForStudent.Count > 3)
+                                        {
+                                            <div class="text-muted text-center py-1" style="font-size: 0.75rem;">
+                                                + @(allPrivateCommentsForStudent.Count - 3) nhận xét khác
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox fs-3 mb-3"></i>
+                        <p style="font-size: 0.9rem;">Chưa có học sinh nào nộp bài tập.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Column 3: Statistics (Right) - Compact square shape -->
+    <div style="flex: 0 0 17%; max-width: 17%;">
+        <div class="card border-0 shadow-sm" style="width: 100%; display: flex; flex-direction: column; height: fit-content; max-height: calc(100vh - 300px);">
+            <div class="card-header bg-info text-white" style="flex-shrink: 0; padding: 1rem;">
+                <h6 class="mb-0" style="font-size: 1rem;"><i class="bi bi-bar-chart me-2"></i>Thống kê</h6>
+            </div>
+            <div class="card-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="d-flex flex-column align-items-center text-center p-3 bg-light rounded">
+                    <div class="text-muted mb-2" style="font-size: 0.85rem;">Tổng số bài nộp</div>
+                    <strong class="text-primary" style="font-size: 2rem; font-weight: 700;">@allSubmissions.Count</strong>
+                </div>
+                <div class="d-flex flex-column align-items-center text-center p-3 bg-light rounded">
+                    <div class="text-muted mb-2" style="font-size: 0.85rem;">Đã chấm điểm</div>
+                    <strong class="text-success" style="font-size: 2rem; font-weight: 700;">@allSubmissions.Count(s => s.Score.HasValue)</strong>
+                </div>
+                <div class="d-flex flex-column align-items-center text-center p-3 bg-light rounded">
+                    <div class="text-muted mb-2" style="font-size: 0.85rem;">Chưa chấm</div>
+                    <strong class="text-warning" style="font-size: 2rem; font-weight: 700;">@allSubmissions.Count(s => !s.Score.HasValue)</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

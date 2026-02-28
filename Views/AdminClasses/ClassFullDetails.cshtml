@@ -1,0 +1,369 @@
+﻿@model FinalASB.ViewModels.ClassFullDetailsViewModel
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = $"Chi tiết lớp: {Model.ClassInfo.ClassName}";
+}
+
+<div class="page-header mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-easel me-2"></i>@Model.ClassInfo.ClassName</h2>
+            <p class="text-muted mb-0">Giáo viên: <strong>@Model.ClassInfo.Owner.FullName</strong> | Mã lớp: @Model.ClassInfo.JoinCode</p>
+        </div>
+        <a href="/AdminClasses/SelectToViewAssignments" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Quay lại
+        </a>
+    </div>
+</div>
+
+<ul class="nav nav-tabs nav-fill mb-4" id="classTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold" id="announcements-tab" data-bs-toggle="tab" data-bs-target="#announcements" type="button" role="tab">
+            <i class="bi bi-megaphone me-2"></i>Thông báo & Thảo luận
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="assignments-tab" data-bs-toggle="tab" data-bs-target="#assignments" type="button" role="tab">
+            <i class="bi bi-journal-text me-2"></i>Bài tập
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="grades-tab" data-bs-toggle="tab" data-bs-target="#grades" type="button" role="tab">
+            <i class="bi bi-grid-3x3 me-2"></i>Bảng điểm chi tiết
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="classTabsContent">
+
+    <div class="tab-pane fade show active" id="announcements" role="tabpanel">
+        @if (Model.Announcements.Any())
+        {
+            <div class="row">
+                @foreach (var item in Model.Announcements)
+                {
+                    <div class="col-12 mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-3 text-primary fw-bold">
+                                        @item.User.FullName.Substring(0, 1)
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">@item.User.FullName</h6>
+                                        <small class="text-muted">@item.CreatedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                                    </div>
+                                </div>
+                                <p class="card-text">@Html.Raw(item.Content.Replace("\n", "<br>"))</p>
+
+                                @if (item.Attachments != null && item.Attachments.Any())
+                                {
+                                    <div class="mt-3 p-3 bg-light rounded">
+                                        <h6 class="small fw-bold text-muted mb-2">Tệp đính kèm:</h6>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach (var file in item.Attachments)
+                                            {
+                                                if (!string.IsNullOrEmpty(file.VideoId)) // Youtube
+                                                {
+                                                    <a href="@file.Url" target="_blank" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-youtube me-1"></i> Youtube: @file.Title
+                                                    </a>
+                                                }
+                                                else // File thường
+                                                {
+                                                    <a href="@file.Url" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-file-earmark me-1"></i> @file.Title
+                                                    </a>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (item.Comments != null && item.Comments.Any())
+                                {
+                                    <hr class="my-3">
+                                    <div class="ps-3 border-start border-3 border-primary">
+                                        <h6 class="small fw-bold text-muted mb-2">Bình luận:</h6>
+                                        @foreach (var cmt in item.Comments)
+                                        {
+                                            <div class="mb-2">
+                                                <strong>@cmt.User.FullName:</strong>
+                                                <span class="text-dark">@cmt.Content</span>
+                                                <small class="text-muted ms-2" style="font-size: 0.75rem">(@cmt.CreatedAt.ToString("dd/MM HH:mm"))</small>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-light text-center">Chưa có thông báo nào.</div>
+        }
+    </div>
+
+    <div class="tab-pane fade" id="assignments" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Tiêu đề bài tập</th>
+                            <th>Ngày tạo</th>
+                            <th>Hạn nộp</th>
+                            <th class="text-center">Số bài nộp</th>
+                            <th class="text-center">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Assignments.Any())
+                        {
+                            foreach (var asm in Model.Assignments)
+                            {
+                                var isOverdue = asm.DueDate.HasValue && asm.DueDate.Value < DateTime.Now;
+                                <tr>
+                                    <td class="ps-4 fw-bold text-primary">@asm.Title</td>
+                                    <td>@asm.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (asm.DueDate.HasValue)
+                                        {
+                                            <span class="badge @(isOverdue ? "bg-danger" : "bg-warning text-dark")">
+                                                @asm.DueDate.Value.ToString("dd/MM/yyyy HH:mm")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Không giới hạn</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info rounded-pill">@asm.Submissions.Count</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="/AdminClasses/AssignmentDetails/@asm.Id" class="btn btn-sm btn-outline-primary">
+                                            Xem chi tiết
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="5" class="text-center py-4">Chưa có bài tập nào.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="grades" role="tabpanel">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="mb-0 text-white">
+                    <i class="bi bi-grid-3x3 me-2"></i>Bảng điểm chi tiết
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: calc(100vh - 400px); overflow-y: auto;">
+                    <table class="table table-hover mb-0 text-center" style="min-width: 800px;">
+                        <thead class="table-light sticky-top" style="background-color: #f8f9fa; z-index: 10;">
+                            <tr>
+                                <th class="text-start sticky-col" style="background-color: #4f46e5; color: white; padding: 1.25rem; min-width: 220px; z-index: 11;">
+                                    <i class="bi bi-person-fill me-2"></i>Học sinh
+                                </th>
+                                @foreach (var asm in Model.Assignments)
+                                {
+                                    <th style="min-width: 140px; padding: 1.25rem; background-color: #4f46e5; color: white; border-left: 1px solid rgba(255,255,255,0.2);">
+                                        <div class="d-flex flex-column align-items-center">
+                                            <small class="text-white-50 mb-1" style="font-size: 0.75rem;">@asm.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                            <span class="fw-bold" style="font-size: 0.9rem; word-break: break-word;">@asm.Title</span>
+                                        </div>
+                                    </th>
+                                }
+                                <th class="bg-dark text-white sticky-col-right" style="padding: 1.25rem; min-width: 100px; background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%) !important; border-left: 2px solid #667eea;">
+                                    <i class="bi bi-calculator me-1"></i>TB
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Students.Any())
+                            {
+                                int rowIndex = 0;
+                                foreach (var std in Model.Students)
+                                {
+                                    rowIndex++;
+                                    <tr style="border-bottom: 1px solid #e9ecef; transition: all 0.2s ease;" 
+                                        onmouseover="this.style.backgroundColor='#f8f9fa'; this.style.transform='scale(1.01)';" 
+                                        onmouseout="this.style.backgroundColor=''; this.style.transform='scale(1)';">
+                                        <td class="text-start fw-bold sticky-col" style="background-color: white; padding: 1.25rem; min-width: 220px; z-index: 1; border-right: 2px solid #e9ecef;">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                                     style="width: 40px; height: 40px; min-width: 40px; font-weight: 600; color: #4f46e5;">
+                                                    @std.User.FullName.First()
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold" style="color: #1e293b; font-size: 0.95rem;">@std.User.FullName</div>
+                                                    <div class="text-muted" style="font-size: 0.8rem;">
+                                                        <i class="bi bi-envelope me-1"></i>@std.User.Email
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        @{
+                                            double totalScore = 0; int count = 0;
+                                        }
+
+                                        @foreach (var asm in Model.Assignments)
+                                        {
+                                            var sub = asm.Submissions.FirstOrDefault(s => s.StudentId == std.UserId);
+                                            <td style="padding: 1.25rem; vertical-align: middle;">
+                                                @if (sub != null)
+                                                {
+                                                    if (sub.Score.HasValue)
+                                                    {
+                                                        <div class="d-flex flex-column align-items-center gap-2">
+                                                            <span class="badge rounded-pill px-3 py-2 fw-bold" 
+                                                                  style="font-size: 1rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
+                                                                @sub.Score
+                                                            </span>
+                                                            @if (!string.IsNullOrEmpty(sub.TeacherComment))
+                                                            {
+                                                                <i class="bi bi-chat-dots-fill text-warning" 
+                                                                   style="font-size: 1.1rem; cursor: pointer;" 
+                                                                   data-bs-toggle="tooltip" 
+                                                                   data-bs-placement="top" 
+                                                                   title="Nhận xét: @sub.TeacherComment"></i>
+                                                            }
+                                                        </div>
+                                                        totalScore += sub.Score.Value;
+                                                        count++;
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-3 py-2 rounded-pill" 
+                                                              style="font-size: 0.85rem;">
+                                                            <i class="bi bi-clock-history me-1"></i>Chưa chấm
+                                                        </span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-3 py-2 rounded-pill" 
+                                                          style="font-size: 0.85rem;">
+                                                        <i class="bi bi-x-circle me-1"></i>Chưa nộp
+                                                    </span>
+                                                }
+                                            </td>
+                                        }
+
+                                        <td class="fw-bold sticky-col-right text-center" 
+                                            style="background-color: white; padding: 1.25rem; min-width: 100px; border-left: 2px solid #667eea; z-index: 1;">
+                                            @if (count > 0)
+                                            {
+                                                var average = Math.Round(totalScore / count, 1);
+                                                <span class="badge rounded-pill px-3 py-2 fw-bold" 
+                                                      style="font-size: 1.1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
+                                                    @average
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="@(Model.Assignments.Count + 2)" class="text-center py-5">
+                                        <div class="d-flex flex-column align-items-center">
+                                            <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                                            <p class="text-muted mb-0">Lớp chưa có học sinh.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* CSS cho cột Học sinh cố định khi cuộn ngang bảng điểm */
+    .sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    
+    .sticky-col-right {
+        position: sticky;
+        right: 0;
+        z-index: 10;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+    }
+    
+    /* Scrollbar styling cho bảng điểm */
+    #grades .table-responsive::-webkit-scrollbar {
+        height: 10px;
+        width: 10px;
+    }
+    
+    #grades .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    #grades .table-responsive::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+    }
+    
+    #grades .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+    }
+    
+    /* Table row hover effect */
+    #grades tbody tr {
+        transition: all 0.2s ease;
+    }
+    
+    #grades tbody tr:hover {
+        background-color: #f8f9fa !important;
+        transform: translateX(2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    /* Badge animations */
+    #grades .badge {
+        transition: all 0.3s ease;
+    }
+    
+    #grades .badge:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+</style>
+
+<script>
+    // Initialize Bootstrap tooltips for comment icons
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>

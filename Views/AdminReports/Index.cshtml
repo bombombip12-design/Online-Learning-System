@@ -1,0 +1,143 @@
+﻿@{
+    // Ép kiểu dữ liệu để dễ code trong View
+
+    var listUsers = ViewBag.ListUsers as IEnumerable<FinalASB.Models.User>;
+
+    var activeClasses = ViewBag.ActiveClasses;
+
+    var totalSubmissions = ViewBag.TotalSubmissions;
+
+    Layout = "_AdminLayout";
+
+    ViewBag.Title = "Reports";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-graph-up me-2"></i>Báo cáo thống kê</h2>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2 text-uppercase small fw-bold">Lớp đang hoạt động</h6>
+                        <h2 class="mb-0 fw-bold text-dark">@activeClasses</h2>
+                        <small class="text-muted">lớp học</small>
+                    </div>
+                    <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-book-fill text-success" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #667eea !important;">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2 text-uppercase small fw-bold">Tổng số bài nộp</h6>
+                        <h2 class="mb-0 fw-bold text-dark">@totalSubmissions</h2>
+                        <small class="text-muted">bài nộp</small>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-send-fill text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom py-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-primary fw-bold"><i class="bi bi-people-fill me-2"></i>Tổng số người dùng</h5>
+            <span class="badge bg-secondary">Tổng: @(listUsers?.Count() ?? 0)</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Họ và tên</th>
+                        <th>Email</th>
+                        <th>Ngày tạo tài khoản</th>
+                        <th class="text-center">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (listUsers != null && listUsers.Any())
+
+                    {
+                        @foreach (var u in listUsers)
+
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        @if (!string.IsNullOrEmpty(u.AvatarUrl))
+
+                                        {
+                                            <img src="@u.AvatarUrl" class="rounded-circle me-3" width="40" height="40" alt="Avatar" style="object-fit: cover;">
+                                        }
+
+                                        else
+
+                                        {
+                                            <div class="bg-light rounded-circle me-3 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                <i class="bi bi-person text-secondary"></i>
+                                            </div>
+                                        }
+                                        <div>
+                                            <div class="fw-bold text-dark">@u.FullName</div>
+                                            <small class="text-muted" style="font-size: 0.8rem;">ID: @u.Id</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="text-muted">@u.Email</span>
+                                </td>
+                                <td>
+                                    <i class="bi bi-calendar3 me-1 text-muted"></i>
+                                    @u.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="text-center">
+                                    @if (u.IsActive == true) // Kiểm tra IsActive (Nullable bool nên cẩn thận)
+
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                                            <i class="bi bi-check-circle-fill me-1"></i> Active
+                                        </span>
+                                    }
+
+                                    else
+
+                                    {
+                                        <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill">
+                                            <i class="bi bi-slash-circle-fill me-1"></i> Blocked
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+
+                    else
+
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                Không có người dùng nào.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

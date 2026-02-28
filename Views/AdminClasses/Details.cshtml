@@ -1,0 +1,307 @@
+@model Class
+@using System.Linq
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "Class Management";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-info-circle me-2"></i>Thông tin lớp học</h2>
+</div>
+
+<div class="row g-4">
+    <!-- Thông tin lớp học -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-book me-2"></i>Thông tin lớp học</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold text-muted">Tên lớp</label>
+                        <p class="mb-0 fs-5">@Model.ClassName</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold text-muted">Mã lớp</label>
+                        <p class="mb-0 fs-5"><span class="badge bg-info">@Model.JoinCode</span></p>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <div class="col-12">
+                            <label class="form-label fw-semibold text-muted">Mô tả</label>
+                            <p class="mb-0">@Model.Description</p>
+                        </div>
+                    }
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold text-muted">Trạng thái</label>
+                        <p class="mb-0">
+                            <span class="badge @(Model.Status == "Active" ? "bg-success" : "bg-secondary")">@(Model.Status ?? "Non-Active")</span>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold text-muted">Khóa/Mở</label>
+                        <p class="mb-0">
+                            @if (Model.IsBlock)
+                            {
+                                <span class="badge bg-danger"><i class="bi bi-lock me-1"></i>Đã khóa</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success"><i class="bi bi-unlock me-1"></i>Chưa khóa</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thông tin giáo viên -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Giáo viên</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="avatar-placeholder me-3" style="width: 50px; height: 50px; font-size: 1.25rem; overflow: hidden;">
+                        @if (!string.IsNullOrEmpty(Model.Owner.AvatarUrl))
+                        {
+                            <img src="@Model.Owner.AvatarUrl" alt="@Model.Owner.FullName" class="avatar-img" />
+                        }
+                        else
+                        {
+                            var teacherInitials = !string.IsNullOrEmpty(Model.Owner.FullName)
+                                ? string.Join("", Model.Owner.FullName.Split(' ').Take(2).Select(n => n[0].ToString().ToUpper()))
+                                : "T";
+                            @teacherInitials
+                        }
+                    </div>
+                    <div>
+                        <h6 class="mb-0">
+                            <a href="#" class="text-decoration-none text-dark"
+                               onclick="showUserModal(@Model.Owner.Id, '@Model.Owner.FullName', '@Model.Owner.Email', '@(Model.Owner.CreatedAt.ToString("dd/MM/yyyy"))', @Model.Owner.IsActive.ToString().ToLower(), '@(Model.Owner.SystemRole?.RoleName ?? "User")', @(Model.Owner.OwnedClasses?.Count ?? 0), @(Model.Owner.Enrollments?.Count ?? 0), '@(Model.Owner.AvatarUrl ?? string.Empty)'); return false;">
+                                @Model.Owner.FullName
+                            </a>
+                        </h6>
+                        <small class="text-muted">@Model.Owner.Email</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Số lượng bài tập -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Bài tập</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <h2 class="display-4 mb-0">@(Model.Assignments?.Count ?? 0)</h2>
+                    <p class="text-muted mb-0">bài tập</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Danh sách học sinh -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-people me-2"></i>Danh sách học sinh (@(Model.Enrollments?.Where(e => e.Role == "Student").Count() ?? 0))</h5>
+            </div>
+            <div class="card-body p-0">
+                @{
+                    var students = Model.Enrollments?.Where(e => e.Role == "Student").ToList() ?? new List<Enrollment>();
+                }
+                @if (students.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">STT</th>
+                                    <th><i class="bi bi-person me-2"></i>Tên học sinh</th>
+                                    <th><i class="bi bi-envelope me-2"></i>Email</th>
+                                    <th><i class="bi bi-calendar me-2"></i>Ngày tham gia</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int index = 1;
+                                }
+                                @foreach (var enrollment in students.OrderBy(e => e.User.FullName))
+                                {
+                                    <tr>
+                                        <td class="ps-4">@index</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-placeholder me-2" style="width: 32px; height: 32px; font-size: 0.75rem; overflow: hidden;">
+                                                    @if (!string.IsNullOrEmpty(enrollment.User.AvatarUrl))
+                                                    {
+                                                        <img src="@enrollment.User.AvatarUrl" alt="@enrollment.User.FullName" class="avatar-img" />
+                                                    }
+                                                    else
+                                                    {
+                                                        var studentInitials = !string.IsNullOrEmpty(enrollment.User.FullName)
+                                                            ? string.Join("", enrollment.User.FullName.Split(' ').Take(2).Select(n => n[0].ToString().ToUpper()))
+                                                            : "S";
+                                                        @studentInitials
+                                                    }
+                                                </div>
+                                                <span class="fw-semibold">
+                                                    <a href="#" class="text-decoration-none text-dark"
+                                                       onclick="showUserModal(@enrollment.User.Id, '@enrollment.User.FullName', '@enrollment.User.Email', '@(enrollment.User.CreatedAt.ToString("dd/MM/yyyy"))', @enrollment.User.IsActive.ToString().ToLower(), '@(enrollment.User.SystemRole?.RoleName ?? "User")', @(enrollment.User.OwnedClasses?.Count ?? 0), @(enrollment.User.Enrollments?.Count ?? 0), '@(enrollment.User.AvatarUrl ?? string.Empty)'); return false;">
+                                                        @enrollment.User.FullName
+                                                    </a>
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>@enrollment.User.Email</td>
+                                        <td>@enrollment.JoinedAt.ToString("dd/MM/yyyy")</td>
+                                    </tr>
+                                    index++;
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-0">Chưa có học sinh nào trong lớp này</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="/AdminClasses" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Quay lại danh sách lớp
+    </a>
+</div>
+
+<!-- Modal hiển thị thông tin người dùng -->
+<div class="modal fade" id="userInfoModal" tabindex="-1" aria-labelledby="userInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="userInfoModalLabel">
+                    <i class="bi bi-person-circle me-2"></i>Thông tin tài khoản
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <div class="avatar-placeholder mx-auto" id="modalAvatar" style="width: 80px; height: 80px; font-size: 2rem;"></div>
+                    <h5 class="mt-3 mb-0" id="modalFullName"></h5>
+                    <p class="text-muted mb-0" id="modalEmail"></p>
+                </div>
+                <hr>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold text-muted small">Ngày tạo tài khoản</label>
+                        <p class="mb-0" id="modalCreatedAt"></p>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold text-muted small">Trạng thái</label>
+                        <p class="mb-0" id="modalIsActive"></p>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold text-muted small">Vai trò hệ thống</label>
+                        <p class="mb-0" id="modalSystemRole"></p>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold text-muted small">Số lớp đã tạo</label>
+                        <p class="mb-0"><span class="badge bg-primary" id="modalOwnedClasses">0</span></p>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold text-muted small">Số lớp đã tham gia</label>
+                        <p class="mb-0"><span class="badge bg-info" id="modalEnrollments">0</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-placeholder {
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        border: 2px solid #e2e8f0;
+    }
+
+    .avatar-placeholder .avatar-img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
+    }
+
+    a:hover {
+        text-decoration: underline !important;
+    }
+</style>
+
+<script>
+    function showUserModal(userId, fullName, email, createdAt, isActive, systemRole, ownedClasses, enrollments, avatarUrl) {
+        // Cập nhật avatar
+        const modalAvatar = document.getElementById('modalAvatar');
+        modalAvatar.innerHTML = '';
+
+        if (avatarUrl && avatarUrl.trim().length > 0) {
+            const img = document.createElement('img');
+            img.src = avatarUrl;
+            img.alt = fullName;
+            img.className = 'avatar-img';
+            modalAvatar.appendChild(img);
+        } else {
+            const nameParts = fullName.split(' ');
+            const initials = nameParts.length > 0
+                ? nameParts.slice(0, 2).map(n => n[0].toUpperCase()).join('')
+                : (fullName.length > 0 ? fullName[0].toUpperCase() : 'U');
+            modalAvatar.textContent = initials;
+        }
+
+        // Cập nhật thông tin
+        document.getElementById('modalFullName').textContent = fullName;
+        document.getElementById('modalEmail').textContent = email;
+        document.getElementById('modalCreatedAt').textContent = createdAt;
+
+        // Trạng thái
+        const isActiveElement = document.getElementById('modalIsActive');
+        if (isActive) {
+            isActiveElement.innerHTML = '<span class="badge bg-success">Hoạt động</span>';
+        } else {
+            isActiveElement.innerHTML = '<span class="badge bg-danger">Vô hiệu hóa</span>';
+        }
+
+        // Vai trò hệ thống
+        const roleBadge = systemRole === 'Admin' ? 'bg-danger' : 'bg-secondary';
+        document.getElementById('modalSystemRole').innerHTML = `<span class="badge ${roleBadge}">${systemRole}</span>`;
+
+        // Số lớp
+        document.getElementById('modalOwnedClasses').textContent = ownedClasses;
+        document.getElementById('modalEnrollments').textContent = enrollments;
+
+        // Hiển thị modal
+        const modal = new bootstrap.Modal(document.getElementById('userInfoModal'));
+        modal.show();
+    }
+</script>

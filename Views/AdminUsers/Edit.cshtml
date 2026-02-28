@@ -1,0 +1,206 @@
+@model FinalASB.Models.User
+@{
+    Layout = "_AdminLayout";
+    ViewBag.Title = "User Management";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-pencil-square me-2"></i>Chỉnh sửa tài khoản</h2>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-11 col-xl-10">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-5">
+                <form asp-action="Edit" method="post">
+                    @Html.AntiForgeryToken()
+
+                    <div asp-validation-summary="All" class="alert alert-danger mb-4" style="@(ViewData.ModelState.ErrorCount > 0 ? "" : "display:none;")"></div>
+
+                    <input type="hidden" asp-for="Id" />
+
+                    <!-- Personal Information Section -->
+                    <h5 class="mb-4 text-primary">
+                        <i class="bi bi-person-badge me-2"></i>Thông tin cá nhân
+                    </h5>
+
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label for="FullName" class="form-label fw-semibold">
+                                <i class="bi bi-person me-2"></i>Tên người dùng <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-person"></i>
+                                </span>
+                                <input type="text" name="FullName" id="FullName" class="form-control form-control-lg" value="@Model.FullName" placeholder="Nhập tên người dùng" required />
+                            </div>
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="Email" class="form-label fw-semibold">
+                                <i class="bi bi-envelope me-2"></i>Email <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-envelope"></i>
+                                </span>
+                                <input type="email" name="Email" id="Email" class="form-control form-control-lg" value="@Model.Email" placeholder="Nhập email" required />
+                            </div>
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <!-- Password Section -->
+                    <h5 class="mb-4 text-primary mt-5">
+                        <i class="bi bi-shield-lock me-2"></i>Thông tin đăng nhập
+                    </h5>
+
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Lưu ý:</strong> Bạn có thể chỉnh sửa thông tin mà không cần đổi mật khẩu. Chỉ cần nhập mật khẩu mới nếu muốn thay đổi mật khẩu của người dùng này.
+                    </div>
+
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label for="Password" class="form-label fw-semibold">
+                                <i class="bi bi-lock me-2"></i>Mật khẩu mới
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-lock"></i>
+                                </span>
+                                <input type="password" name="Password" id="Password" class="form-control form-control-lg" placeholder="Nhập mật khẩu mới (tùy chọn)" data-val="false" />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('Password', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-info-circle me-1"></i>Để trống nếu không muốn đổi mật khẩu. Tối thiểu 6 ký tự nếu đổi.
+                            </small>
+                            @if (ViewData.ModelState["Password"]?.Errors.Count > 0)
+                            {
+                                <span class="text-danger small d-block">@ViewData.ModelState["Password"].Errors[0].ErrorMessage</span>
+                            }
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="ConfirmPassword" class="form-label fw-semibold">
+                                <i class="bi bi-lock-fill me-2"></i>Xác nhận mật khẩu mới
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-lock-fill"></i>
+                                </span>
+                                <input type="password" name="ConfirmPassword" id="ConfirmPassword" class="form-control form-control-lg" placeholder="Nhập lại mật khẩu mới (nếu đổi)" data-val="false" />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('ConfirmPassword', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-info-circle me-1"></i>Chỉ cần nhập nếu đổi mật khẩu
+                            </small>
+                            @if (ViewData.ModelState["ConfirmPassword"]?.Errors.Count > 0)
+                            {
+                                <span class="text-danger small d-block">@ViewData.ModelState["ConfirmPassword"].Errors[0].ErrorMessage</span>
+                            }
+                        </div>
+
+                        <div class="col-md-12">
+                            <label for="AdminPassword" class="form-label fw-semibold">
+                                <i class="bi bi-key me-2"></i>Mật khẩu admin <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-key"></i>
+                                </span>
+                                <input type="password" name="AdminPassword" id="AdminPassword" class="form-control form-control-lg" placeholder="Nhập mật khẩu admin để xác nhận" required />
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="togglePassword('AdminPassword', this)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-shield-check me-1"></i>Bắt buộc nhập để xác nhận quyền admin và lưu thay đổi
+                            </small>
+                            @if (ViewData.ModelState["AdminPassword"]?.Errors.Count > 0)
+                            {
+                                <span class="text-danger small d-block">@ViewData.ModelState["AdminPassword"].Errors[0].ErrorMessage</span>
+                            }
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-3 justify-content-end mt-4">
+                        <a href="/AdminUsers" class="btn btn-outline-secondary px-4">
+                            <i class="bi bi-x-circle me-2"></i>Hủy
+                        </a>
+                        <button type="submit" class="btn btn-primary px-5">
+                            <i class="bi bi-check-circle me-2"></i>Lưu thay đổi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .input-group-text {
+        min-width: 50px;
+        justify-content: center;
+        background-color: #f8f9fa !important;
+        font-size: 1rem;
+    }
+
+    .input-group-lg .input-group-text {
+        min-width: 55px;
+        padding: 0.75rem 1rem;
+    }
+
+    .form-control-lg,
+    .form-select-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .form-label {
+        margin-bottom: 0.5rem;
+        color: #495057;
+        font-size: 0.95rem;
+    }
+
+    h5 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+</style>
+
+@section Scripts {
+    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <script type="text/javascript">
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+
+            const icon = button ? button.querySelector('i') : null;
+            if (!icon) return;
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('bi-eye');
+                icon.classList.add('bi-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('bi-eye-slash');
+                icon.classList.add('bi-eye');
+            }
+        }
+
+    </script>
+}
+

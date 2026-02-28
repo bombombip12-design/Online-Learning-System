@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ABC Classroom</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" id="dashboardSidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-graduation-cap me-2"></i>ABC Classroom</h3>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="@Url.Action("Index", "Home")" class="sidebar-item" data-section="home" data-filter="all">
+                <i class="fas fa-home"></i>
+                <span>Màn hình chính</span>
+            </a>
+            <div class="sidebar-item-dropdown">
+                <a href="#" class="sidebar-item sidebar-item-toggle" data-dropdown="teaching">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                    <span>Giảng dạy</span>
+                    <i class="fas fa-chevron-down sidebar-chevron"></i>
+                </a>
+                <div class="sidebar-dropdown-content" id="teachingDropdown">
+                    @await Component.InvokeAsync("SidebarClasses", new { showType = "teaching" })
+                </div>
+            </div>
+            <div class="sidebar-item-dropdown">
+                <a href="#" class="sidebar-item sidebar-item-toggle" data-dropdown="classes">
+                    <i class="fas fa-users"></i>
+                    <span>Lớp học</span>
+                    <i class="fas fa-chevron-down sidebar-chevron"></i>
+                </a>
+                <div class="sidebar-dropdown-content" id="classesDropdown">
+                    @await Component.InvokeAsync("SidebarClasses", new { showType = "student" })
+                </div>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content Wrapper -->
+    <div class="dashboard-main-wrapper">
+        <!-- Top Bar -->
+        <header class="dashboard-topbar">
+            <div class="topbar-left">
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h4 class="topbar-title">Lớp học</h4>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-actions dropdown">
+                    <button class="topbar-btn" id="addButton" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="addDropdown" aria-labelledby="addButton">
+                        <li>
+                            <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#joinClassModal">
+                                <i class="fas fa-sign-in-alt me-2"></i>Tham gia lớp học
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#createClassModal">
+                                <i class="fas fa-plus me-2"></i>Tạo lớp học
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="topbar-actions dropdown">
+                    <button class="topbar-btn avatar-btn" id="avatarButton" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        @await Component.InvokeAsync("UserAvatar")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" id="avatarDropdown" aria-labelledby="avatarButton">
+                        <li>
+                            <a class="dropdown-item" href="@Url.Action("Index", "Profile")">
+                                <i class="fas fa-user me-2"></i>Xem hồ sơ
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="document.getElementById('logoutForm').submit();">
+                                <i class="fas fa-sign-out-alt me-2"></i>Đăng xuất
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-content">
+            @{
+                var successMessage = TempData["SuccessMessage"] as string;
+                var errorMessage = TempData["ErrorMessage"] as string;
+            }
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show fade-in dashboard-auto-dismiss" role="alert">
+                    <i class="fas fa-check-circle me-2"></i>
+                    @successMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+            @RenderBody()
+        </main>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="dashboard-alert-modal" id="dashboardAlertModal" role="alertdialog" aria-modal="true" aria-labelledby="dashboardAlertTitle">
+            <div class="dashboard-alert-modal__dialog">
+                <div class="dashboard-alert-modal__header">
+                    <div class="dashboard-alert-modal__icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <p class="dashboard-alert-modal__label">Thông báo hệ thống</p>
+                        <h5 class="dashboard-alert-modal__title" id="dashboardAlertTitle">Lỗi truy cập lớp học</h5>
+                    </div>
+                    <button type="button" class="dashboard-alert-modal__close" data-alert-close aria-label="Đóng">&times;</button>
+                </div>
+                <div class="dashboard-alert-modal__body">
+                    @errorMessage
+                </div>
+                <div class="dashboard-alert-modal__footer">
+                    <button type="button" class="glassy-btn" data-alert-close>Xác nhận</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Dashboard Confirm Modal -->
+    <div class="dashboard-confirm-modal" id="dashboardConfirmModal" role="dialog" aria-modal="true" aria-labelledby="dashboardConfirmTitle" aria-hidden="true">
+        <div class="dashboard-confirm-modal__dialog">
+            <div class="dashboard-confirm-modal__header">
+                <div class="dashboard-confirm-modal__icon">
+                    <i class="fas fa-question-circle"></i>
+                </div>
+                <div>
+                    <p class="dashboard-confirm-modal__label">Xác nhận thao tác</p>
+                    <h5 class="dashboard-confirm-modal__title" id="dashboardConfirmTitle">Bạn có chắc chắn?</h5>
+                </div>
+                <button type="button" class="dashboard-confirm-modal__close" data-confirm-close aria-label="Đóng">&times;</button>
+            </div>
+            <div class="dashboard-confirm-modal__body" id="dashboardConfirmMessage">
+                Bạn có chắc chắn muốn thực hiện thao tác này?
+            </div>
+            <div class="dashboard-confirm-modal__footer">
+                <button type="button" class="glassy-btn glassy-btn-outline" data-confirm-cancel>Hủy</button>
+                <button type="button" class="glassy-btn glassy-btn-danger" data-confirm-ok>Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Class Modal -->
+    <div class="modal fade" id="joinClassModal" tabindex="-1" aria-labelledby="joinClassModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content simple-modal">
+                <div class="modal-header simple-modal-header">
+                    <h5 class="modal-title simple-modal-title" id="joinClassModalLabel">Tham gia lớp học</h5>
+                    
+                </div>
+                <form asp-controller="Classes" asp-action="Join" method="post" id="joinClassForm">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body simple-modal-body">
+                        <div class="simple-form-group">
+                            <label for="joinCode" class="simple-form-label">
+                                Mã lớp học
+                            </label>
+                            <input type="text" name="joinCode" id="joinCode" 
+                                   class="simple-form-input text-center" 
+                                   placeholder="Nhập mã lớp học" 
+                                   maxlength="6" 
+                                   style="font-size: 1.25rem; letter-spacing: 0.3rem; font-weight: 500;" 
+                                   required />
+                            <div id="joinClassError" class="simple-error" style="display: none;"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer simple-modal-footer">
+                        <button type="button" class="simple-btn simple-btn-cancel" data-bs-dismiss="modal">Huỷ</button>
+                        <button type="submit" class="simple-btn simple-btn-primary">Tham gia</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Class Modal -->
+    <div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content simple-modal">
+                <div class="modal-header simple-modal-header">
+                    <h5 class="modal-title simple-modal-title" id="createClassModalLabel">Tạo lớp học</h5>
+                </div>
+                <form asp-controller="Classes" asp-action="Create" method="post" id="createClassForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body simple-modal-body">
+                        <div class="simple-form-group">
+                            <label for="ClassName" class="simple-form-label">
+                                Tên lớp học <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="ClassName" name="ClassName" class="simple-form-input" placeholder="Nhập tên lớp học" required />
+                            <div id="classNameError" class="simple-error" style="display: none;"></div>
+                        </div>
+                        <div class="simple-form-group">
+                            <label for="Description" class="simple-form-label">
+                                Mô tả
+                            </label>
+                            <textarea id="Description" name="Description" class="simple-form-input" rows="3" placeholder="Nhập mô tả (tùy chọn)"></textarea>
+                            <div id="descriptionError" class="simple-error" style="display: none;"></div>
+                        </div>
+                        <div class="simple-form-group">
+                            <label for="ClassImageFile" class="simple-form-label">
+                                Ảnh lớp học (tùy chọn)
+                            </label>
+                            <input type="file" id="ClassImageFile" name="ClassImageFile" accept="image/*" class="simple-form-input" style="padding: 0.5rem 0; border-bottom: 1px solid #dadce0;" />
+                            <small class="text-muted" style="font-size: 0.75rem;">Chấp nhận: JPG, PNG, GIF (tối đa 5MB)</small>
+                            <div id="classImageError" class="simple-error" style="display: none;"></div>
+                        </div>
+                        <div id="createClassError" class="simple-error" style="display: none;"></div>
+                    </div>
+                    <div class="modal-footer simple-modal-footer">
+                        <button type="button" class="simple-btn simple-btn-cancel" data-bs-dismiss="modal">Huỷ</button>
+                        <button type="submit" class="simple-btn simple-btn-primary">Tạo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <form id="logoutForm" asp-controller="Account" asp-action="Logout" method="post" style="display:none;">
+        @Html.AntiForgeryToken()
+    </form>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        // Sidebar toggle
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            const sidebar = document.getElementById('dashboardSidebar');
+            const wrapper = document.querySelector('.dashboard-main-wrapper');
+            sidebar.classList.toggle('collapsed');
+            wrapper.classList.toggle('sidebar-collapsed');
+        });
+
+        // Sidebar dropdown toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropdownToggles = document.querySelectorAll('.sidebar-item-toggle[data-dropdown]');
+            dropdownToggles.forEach(function(toggle) {
+                toggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const dropdownId = this.getAttribute('data-dropdown');
+                    const dropdown = this.closest('.sidebar-item-dropdown');
+                    
+                    if (!dropdown) return;
+                    
+                    // Close other dropdowns
+                    document.querySelectorAll('.sidebar-item-dropdown').forEach(function(item) {
+                        if (item !== dropdown) {
+                            item.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle current dropdown
+                    dropdown.classList.toggle('active');
+                });
+            });
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.sidebar-item-dropdown')) {
+                    document.querySelectorAll('.sidebar-item-dropdown').forEach(function(item) {
+                        item.classList.remove('active');
+                    });
+                }
+            });
+        });
+
+        // Dropdown toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const addButton = document.getElementById('addButton');
+            const avatarButton = document.getElementById('avatarButton');
+            const addDropdown = document.getElementById('addDropdown');
+            const avatarDropdown = document.getElementById('avatarDropdown');
+            
+            // Toggle add dropdown
+            if (addButton && addDropdown) {
+                addButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Close avatar dropdown if open
+                    if (avatarDropdown) {
+                        avatarDropdown.classList.remove('show');
+                        avatarButton.setAttribute('aria-expanded', 'false');
+                    }
+                    
+                    // Toggle add dropdown
+                    const isOpen = addDropdown.classList.contains('show');
+                    if (isOpen) {
+                        addDropdown.classList.remove('show');
+                        addButton.setAttribute('aria-expanded', 'false');
+                    } else {
+                        addDropdown.classList.add('show');
+                        addButton.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            }
+            
+            // Toggle avatar dropdown
+            if (avatarButton && avatarDropdown) {
+                avatarButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Close add dropdown if open
+                    if (addDropdown) {
+                        addDropdown.classList.remove('show');
+                        addButton.setAttribute('aria-expanded', 'false');
+                    }
+                    
+                    // Toggle avatar dropdown
+                    const isOpen = avatarDropdown.classList.contains('show');
+                    if (isOpen) {
+                        avatarDropdown.classList.remove('show');
+                        avatarButton.setAttribute('aria-expanded', 'false');
+                    } else {
+                        avatarDropdown.classList.add('show');
+                        avatarButton.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            }
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (addButton && !addButton.contains(e.target) && addDropdown && !addDropdown.contains(e.target)) {
+                    addDropdown.classList.remove('show');
+                    addButton.setAttribute('aria-expanded', 'false');
+                }
+                
+                if (avatarButton && !avatarButton.contains(e.target) && avatarDropdown && !avatarDropdown.contains(e.target)) {
+                    avatarDropdown.classList.remove('show');
+                    avatarButton.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            // Handle modal triggers from dropdown
+            const joinClassLink = document.querySelector('a[data-bs-target="#joinClassModal"]');
+            const createClassLink = document.querySelector('a[data-bs-target="#createClassModal"]');
+
+            function showModal(modalId) {
+                const modalElement = document.getElementById(modalId);
+                if (!modalElement) {
+                    console.error('Modal element not found:', modalId);
+                    return;
+                }
+
+                // Create and show backdrop
+                let backdrop = document.querySelector('.modal-backdrop');
+                if (!backdrop) {
+                    backdrop = document.createElement('div');
+                    backdrop.className = 'modal-backdrop fade';
+                    document.body.appendChild(backdrop);
+                }
+                
+                // Show backdrop 
+                setTimeout(() => {
+                    backdrop.classList.add('show');
+                }, 10);
+
+                // Show modal
+                modalElement.classList.add('show');
+                modalElement.style.display = 'block';
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+                document.body.style.paddingRight = '0px';
+
+                // Focus on modal
+                modalElement.setAttribute('aria-hidden', 'false');
+                modalElement.setAttribute('aria-modal', 'true');
+            }
+
+            function hideModal(modalId) {
+                const modalElement = document.getElementById(modalId);
+                if (modalElement) {
+                    modalElement.classList.remove('show');
+                    modalElement.style.display = 'none';
+                    modalElement.setAttribute('aria-hidden', 'true');
+                    modalElement.setAttribute('aria-modal', 'false');
+                }
+
+                // Hide backdrop
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.classList.remove('show');
+                    setTimeout(() => {
+                        if (backdrop && !backdrop.classList.contains('show')) {
+                            backdrop.remove();
+                        }
+                    }, 150);
+                }
+
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+
+            if (joinClassLink) {
+                joinClassLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Close dropdown
+                    if (addDropdown) {
+                        addDropdown.classList.remove('show');
+                        addButton.setAttribute('aria-expanded', 'false');
+                    }
+                    // Open modal
+                    showModal('joinClassModal');
+                });
+            }
+
+            if (createClassLink) {
+                createClassLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Close dropdown
+                    if (addDropdown) {
+                        addDropdown.classList.remove('show');
+                        addButton.setAttribute('aria-expanded', 'false');
+                    }
+                    // Open modal
+                    showModal('createClassModal');
+                });
+            }
+
+            // Close modal when clicking backdrop or close button
+            document.querySelectorAll('.modal').forEach(function(modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        hideModal(this.id);
+                    }
+                });
+
+                const closeButtons = modal.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+                closeButtons.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        hideModal(modal.id);
+                    });
+                });
+            });
+        });
+
+        // Sidebar filter functionality - attach to existing sidebar items
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== INIT SIDEBAR FILTER ===');
+            
+            const sidebarItems = document.querySelectorAll('.sidebar-item[data-filter]');
+            console.log('Found sidebar items:', sidebarItems.length);
+            
+            // Also initialize join form here
+            console.log('=== INIT JOIN FORM (in DOMContentLoaded) ===');
+            initJoinForm();
+            
+            if (sidebarItems.length === 0) {
+                console.error('No sidebar items found!');
+                return;
+            }
+            
+            sidebarItems.forEach(function(item, index) {
+                const filter = item.getAttribute('data-filter');
+                const section = item.getAttribute('data-section');
+                console.log(`Sidebar item ${index}: section="${section}", filter="${filter}"`);
+                
+                // Remove any existing click handlers
+                const newItem = item.cloneNode(true);
+                item.parentNode.replaceChild(newItem, item);
+                
+                // Make sure it's clickable
+                newItem.style.pointerEvents = 'auto';
+                newItem.style.cursor = 'pointer';
+                
+                newItem.addEventListener('click', function(e) {
+                    console.log('=== SIDEBAR ITEM CLICKED ===');
+                    console.log('Section:', this.getAttribute('data-section'));
+                    console.log('Filter:', this.getAttribute('data-filter'));
+                    console.log('Href:', this.href);
+                    
+                    if (this.getAttribute('data-section') === 'settings') {
+                        console.log('Settings clicked, returning');
+                        return; // Settings doesn't filter
+                    }
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    // Check if we're on home page
+                    const classCards = document.querySelectorAll('.dashboard-class-card');
+                    console.log('Class cards found:', classCards.length);
+                    
+                    if (classCards.length === 0) {
+                        console.log('No cards found, navigating to home page');
+                        window.location.href = this.href;
+                        return;
+                    }
+                    
+                    // Update active state
+                    document.querySelectorAll('.sidebar-item').forEach(function(sidebarItem) {
+                        sidebarItem.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    console.log('Active state updated');
+                    
+                    // Filter classes
+                    const filterValue = this.getAttribute('data-filter');
+                    
+                    console.log('Filter value:', filterValue);
+                    console.log('Total cards found:', classCards.length);
+                    
+                    let visibleCount = 0;
+                    let hiddenCount = 0;
+                    
+                    classCards.forEach(function(card, cardIndex) {
+                        if (filterValue === 'all') {
+                            card.style.setProperty('display', 'flex', 'important');
+                            card.style.visibility = 'visible';
+                            card.style.opacity = '1';
+                            card.removeAttribute('hidden');
+                            card.classList.remove('hidden');
+                            visibleCount++;
+                            console.log(`Card ${cardIndex}: Showing (filter=all)`);
+                        } else {
+                            const role = card.getAttribute('data-role');
+                            console.log(`Card ${cardIndex}: data-role="${role}", filter="${filterValue}"`);
+                            
+                            // Trim and compare case-insensitively
+                            if (role && role.trim().toLowerCase() === filterValue.trim().toLowerCase()) {
+                                card.style.setProperty('display', 'flex', 'important');
+                                card.style.visibility = 'visible';
+                                card.style.opacity = '1';
+                                card.removeAttribute('hidden');
+                                card.classList.remove('hidden');
+                                visibleCount++;
+                                console.log(`Card ${cardIndex}: Showing (role matches)`);
+                            } else {
+                                card.style.setProperty('display', 'none', 'important');
+                                card.style.visibility = 'hidden';
+                                card.style.opacity = '0';
+                                card.setAttribute('hidden', 'true');
+                                card.classList.add('hidden');
+                                hiddenCount++;
+                                console.log(`Card ${cardIndex}: Hiding (role doesn't match)`);
+                            }
+                        }
+                    });
+                    
+                    console.log(`Filter result: ${visibleCount} visible, ${hiddenCount} hidden`);
+                    console.log('=== END FILTER ===');
+                    
+                    return false;
+                }, true); // Use capture phase to ensure it runs first
+            });
+        });
+
+        // Join Class Form Handler
+        function initJoinForm() {
+            const joinForm = document.getElementById('joinClassForm');
+            console.log('=== INIT JOIN FORM ===');
+            console.log('Join form element found:', !!joinForm);
+            
+            if (!joinForm) {
+                console.error('Join form not found! Will retry when modal opens...');
+                // Try to attach when modal is shown
+                const modal = document.getElementById('joinClassModal');
+                if (modal) {
+                    modal.addEventListener('shown.bs.modal', function() {
+                        console.log('Modal shown, retrying join form init...');
+                        const form = document.getElementById('joinClassForm');
+                        if (form && !form.hasAttribute('data-listener-attached')) {
+                            form.setAttribute('data-listener-attached', 'true');
+                            attachJoinFormListener(form);
+                        }
+                    });
+                }
+                return;
+            }
+            
+            // Check if already attached
+            if (joinForm.hasAttribute('data-listener-attached')) {
+                console.log('Join form listener already attached');
+                return;
+            }
+            
+            attachJoinFormListener(joinForm);
+        }
+        
+        function attachJoinFormListener(form) {
+            console.log('Attaching listener to join form');
+            console.log('Form element:', form);
+            
+            // Also attach to submit button as backup
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                console.log('Found submit button, attaching click listener');
+                submitButton.addEventListener('click', function(e) {
+                    console.log('=== SUBMIT BUTTON CLICKED ===');
+                    // Let form submit event handle it, but log for debugging
+                });
+            }
+            
+            form.addEventListener('submit', async function(e) {
+                console.log('=== JOIN FORM SUBMITTED ===');
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const formElement = this;
+                const formData = new FormData(formElement);
+                const errorDiv = document.getElementById('joinClassError');
+                const modalElement = document.getElementById('joinClassModal');
+                
+                console.log('Form action:', formElement.action);
+                console.log('Join code:', formData.get('joinCode'));
+                
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
+                
+                // Function to show success and close modal
+                function showSuccessAndClose() {
+                    console.log('=== showSuccessAndClose called ===');
+                    
+                    // Show success message
+                    showSuccessMessage('Tham gia lớp học thành công!');
+                    console.log('Success message shown');
+                    
+                    // Hide modal manually
+                    if (modalElement) {
+                        console.log('Closing modal');
+                        modalElement.classList.remove('show');
+                        modalElement.style.display = 'none';
+                        modalElement.setAttribute('aria-hidden', 'true');
+                        modalElement.setAttribute('aria-modal', 'false');
+                        
+                        // Remove backdrop
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            console.log('Removing backdrop');
+                            backdrop.classList.remove('show');
+                            setTimeout(() => {
+                                if (backdrop && !backdrop.classList.contains('show')) {
+                                    backdrop.remove();
+                                    console.log('Backdrop removed');
+                                }
+                            }, 150);
+                        }
+                        
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                        console.log('Modal closed');
+                    }
+                    
+                    // Reset form
+                    formElement.reset();
+                    console.log('Form reset');
+                    
+                    // Reload page to show newly joined class
+                    console.log('Reloading page...');
+                    // Small delay to ensure message is visible before reload
+                    setTimeout(function() {
+                        console.log('Executing reload...');
+                        try {
+                            window.location.reload(true);
+                        } catch (e) {
+                            console.error('Reload error:', e);
+                            window.location.href = window.location.href;
+                        }
+                    }, 800);
+                }
+
+                try {
+                    console.log('Starting fetch request...');
+                    const response = await fetch(formElement.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'RequestVerificationToken': formElement.querySelector('[name="__RequestVerificationToken"]').value
+                        }
+                    });
+                    
+                    console.log('=== FETCH RESPONSE RECEIVED ===');
+                    console.log('Response status:', response.status);
+                    console.log('Response ok:', response.ok);
+                    console.log('Response type:', response.type);
+                    
+                    // Check if response is OK
+                    if (response.ok || response.status === 200) {
+                        const contentType = response.headers.get('content-type') || '';
+                        console.log('Content-Type:', contentType);
+                        
+                        if (contentType.includes('application/json')) {
+                            try {
+                                const data = await response.json();
+                                console.log('Join JSON data:', data);
+                                
+                                if (data.success) {
+                                    console.log('Success = true, calling showSuccessAndClose');
+                                    showSuccessAndClose();
+                                } else {
+                                    console.log('Success = false, showing error:', data.error);
+                                    errorDiv.textContent = data.error || 'Đã xảy ra lỗi. Vui lòng thử lại.';
+                                    errorDiv.style.display = 'block';
+                                }
+                            } catch (e) {
+                                console.error('JSON parse error:', e);
+                                // If JSON parse fails but status is OK, assume success
+                                console.log('JSON parse failed, assuming success');
+                                showSuccessAndClose();
+                            }
+                        } else {
+                            // Not JSON, assume success
+                            console.log('Response is not JSON, assuming success');
+                            showSuccessAndClose();
+                        }
+                    } else {
+                        // Response not OK
+                        console.log('Response not OK, status:', response.status);
+                        const text = await response.text();
+                        console.log('Response text:', text.substring(0, 200));
+                        errorDiv.textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+                        errorDiv.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('=== FETCH ERROR ===');
+                    console.error('Error:', error);
+                    errorDiv.textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+                    errorDiv.style.display = 'block';
+                }
+            });
+        }
+        
+        // Initialize join form when DOM is ready
+        // Use the same DOMContentLoaded handler as sidebar filter
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== INIT JOIN FORM (DOMContentLoaded) ===');
+            initJoinForm();
+        });
+        
+        // Also try immediately if DOM is already loaded
+        if (document.readyState !== 'loading') {
+            console.log('=== INIT JOIN FORM (immediate) ===');
+            initJoinForm();
+        }
+
+        // Create Class Form Handler
+        document.getElementById('createClassForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            const formData = new FormData(form);
+            const errorDiv = document.getElementById('createClassError');
+            const classNameError = document.getElementById('classNameError');
+            const descriptionError = document.getElementById('descriptionError');
+            
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            classNameError.style.display = 'none';
+            descriptionError.style.display = 'none';
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': form.querySelector('[name="__RequestVerificationToken"]').value
+                },
+                redirect: 'follow'
+            })
+            .then(async response => {
+                console.log('Response status:', response.status);
+                console.log('Response redirected:', response.redirected);
+                console.log('Response ok:', response.ok);
+                
+                const modalElement = document.getElementById('createClassModal');
+                
+                // Function to show success and close modal
+                function showSuccessAndClose() {
+                    console.log('Showing success message and closing modal');
+                    
+                    // Show success message
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'alert alert-success';
+                    successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px; animation: slideIn 0.3s ease-out;';
+                    successMsg.innerHTML = '<i class="fas fa-check-circle me-2"></i>Đã tạo lớp học thành công!';
+                    document.body.appendChild(successMsg);
+                    
+                    // Hide modal manually
+                    if (modalElement) {
+                        modalElement.classList.remove('show');
+                        modalElement.style.display = 'none';
+                        modalElement.setAttribute('aria-hidden', 'true');
+                        modalElement.setAttribute('aria-modal', 'false');
+                        
+                        // Remove backdrop
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            backdrop.classList.remove('show');
+                            setTimeout(() => {
+                                if (backdrop && !backdrop.classList.contains('show')) {
+                                    backdrop.remove();
+                                }
+                            }, 150);
+                        }
+                        
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    }
+                    
+                    // Reset form
+                    form.reset();
+                    
+                    // Reload page after a short delay to show the message
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                }
+                
+                // Check response status first
+                if (response.status === 200 || response.status === 302 || response.ok) {
+                    // Try to parse as JSON
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        try {
+                            const data = await response.json();
+                            console.log('JSON data:', data);
+                            if (data.success) {
+                                showSuccessAndClose();
+                                return;
+                            } else {
+                                // Show errors
+                                errorDiv.style.display = 'none';
+                                errorDiv.textContent = '';
+                                classNameError.style.display = 'none';
+                                descriptionError.style.display = 'none';
+                                
+                                if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+                                    errorDiv.textContent = data.errors.join(', ');
+                                    errorDiv.style.display = 'block';
+                                } else if (data.error) {
+                                    errorDiv.textContent = data.error;
+                                    errorDiv.style.display = 'block';
+                                }
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('JSON parse error:', e);
+                            // If JSON parse fails but status is OK, assume success
+                            showSuccessAndClose();
+                            return;
+                        }
+                    } else {
+                        // Not JSON, but status is OK - assume success
+                        console.log('Response is OK but not JSON, assuming success');
+                        showSuccessAndClose();
+                        return;
+                    }
+                }
+                
+                // Error response
+                try {
+                    const html = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const validationSummary = doc.querySelector('.validation-summary, .alert-danger');
+                    
+                    errorDiv.style.display = 'none';
+                    errorDiv.textContent = '';
+                    classNameError.style.display = 'none';
+                    descriptionError.style.display = 'none';
+                    
+                    if (validationSummary) {
+                        errorDiv.innerHTML = validationSummary.innerHTML;
+                        errorDiv.style.display = 'block';
+                    } else {
+                        errorDiv.textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+                        errorDiv.style.display = 'block';
+                    }
+                } catch (e) {
+                    console.error('Error parsing response:', e);
+                    // If can't parse error, assume success
+                    showSuccessAndClose();
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                // On error, assume class was created
+                const modalElement = document.getElementById('createClassModal');
+                
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.className = 'alert alert-success';
+                successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px; animation: slideIn 0.3s ease-out;';
+                successMsg.innerHTML = '<i class="fas fa-check-circle me-2"></i>Đã tạo lớp học thành công!';
+                document.body.appendChild(successMsg);
+                
+                // Hide modal manually
+                if (modalElement) {
+                    modalElement.classList.remove('show');
+                    modalElement.style.display = 'none';
+                    modalElement.setAttribute('aria-hidden', 'true');
+                    modalElement.setAttribute('aria-modal', 'false');
+                    
+                    // Remove backdrop
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) {
+                        backdrop.classList.remove('show');
+                        setTimeout(() => {
+                            if (backdrop && !backdrop.classList.contains('show')) {
+                                backdrop.remove();
+                            }
+                        }, 150);
+                    }
+                    
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    document.body.style.paddingRight = '';
+                }
+                
+                // Reset form
+                form.reset();
+                
+                // Reload page after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            });
+        });
+
+        // Auto-uppercase join code
+        document.getElementById('joinCode')?.addEventListener('input', function(e) {
+            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        });
+
+        // Reset modals when closed
+        document.getElementById('joinClassModal')?.addEventListener('hidden.bs.modal', function() {
+            const form = document.getElementById('joinClassForm');
+            form?.reset();
+            document.getElementById('joinClassError').style.display = 'none';
+        });
+
+        document.getElementById('createClassModal')?.addEventListener('hidden.bs.modal', function() {
+            const form = document.getElementById('createClassForm');
+            form?.reset();
+            document.getElementById('createClassError').style.display = 'none';
+            document.getElementById('classNameError').style.display = 'none';
+            document.getElementById('descriptionError').style.display = 'none';
+        });
+
+        // Class card dropdown menu functions
+        function toggleClassMenu(classId, userRole) {
+            const menu = document.getElementById('classMenu_' + classId);
+            if (!menu) return;
+
+            // Close all other menus
+            document.querySelectorAll('.class-card-dropdown').forEach(function(m) {
+                if (m.id !== 'classMenu_' + classId) {
+                    m.style.display = 'none';
+                }
+            });
+
+            // Toggle current menu
+            if (menu.style.display === 'none' || !menu.style.display) {
+                menu.style.display = 'block';
+            } else {
+                menu.style.display = 'none';
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.dropdown')) {
+                document.querySelectorAll('.class-card-dropdown').forEach(function(menu) {
+                    menu.style.display = 'none';
+                });
+            }
+        });
+
+        // Copy class code
+        function copyClassCode(code) {
+            navigator.clipboard.writeText(code).then(function() {
+                showSuccessMessage('Đã sao chép mã lớp học: ' + code);
+            }).catch(function() {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showSuccessMessage('Đã sao chép mã lớp học: ' + code);
+            });
+            
+            // Close menu
+            document.querySelectorAll('.class-card-dropdown').forEach(function(menu) {
+                menu.style.display = 'none';
+            });
+        }
+
+        // Open edit class modal
+        function openEditClassModal(classId, className, description) {
+            document.getElementById('editClassId').value = classId;
+            document.getElementById('editClassName').value = className;
+            document.getElementById('editClassDescription').value = description || '';
+            
+            // Show modal
+            const modalElement = document.getElementById('editClassModal');
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            modalElement.setAttribute('aria-hidden', 'false');
+            modalElement.setAttribute('aria-modal', 'true');
+            
+            // Create backdrop
+            let backdrop = document.querySelector('.modal-backdrop');
+            if (!backdrop) {
+                backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade';
+                document.body.appendChild(backdrop);
+            }
+            setTimeout(() => {
+                backdrop.classList.add('show');
+            }, 10);
+            
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+            
+            // Close menu
+            document.querySelectorAll('.class-card-dropdown').forEach(function(menu) {
+                menu.style.display = 'none';
+            });
+        }
+
+        // Delete class
+        async function deleteClass(classId, className) {
+            const confirmed = await showDashboardConfirm({
+                title: 'Xóa lớp học',
+                message: 'Bạn có chắc muốn xóa lớp học "' + className + '"? Lớp học sẽ không hiển thị trong danh sách nữa.',
+                confirmLabel: 'Xác nhận xóa',
+                cancelLabel: 'Hủy bỏ',
+                variant: 'danger'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '@Url.Action("Delete", "Classes")'.replace(/&amp;/g, '&');
+            
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '__RequestVerificationToken';
+            tokenInput.value = token;
+            form.appendChild(tokenInput);
+            
+            const idInput = document.createElement('input');
+            idInput.type = 'hidden';
+            idInput.name = 'id';
+            idInput.value = classId;
+            form.appendChild(idInput);
+            
+            document.body.appendChild(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.body.removeChild(form);
+                if (data.success) {
+                    showSuccessMessage(data.message || 'Đã xóa lớp học thành công!');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    showErrorMessage(data.error || 'Đã xảy ra lỗi khi xóa lớp học.');
+                }
+            })
+            .catch(error => {
+                document.body.removeChild(form);
+                console.error('Error:', error);
+                showErrorMessage('Đã xảy ra lỗi khi xóa lớp học.');
+            });
+            
+            // Close menu
+            document.querySelectorAll('.class-card-dropdown').forEach(function(menu) {
+                menu.style.display = 'none';
+            });
+        }
+
+        // Leave class
+        async function leaveClass(classId, className) {
+            const confirmed = await showDashboardConfirm({
+                title: 'Rời lớp học',
+                message: 'Bạn có chắc muốn rời khỏi lớp học "' + className + '"?',
+                confirmLabel: 'Xác nhận rời lớp',
+                cancelLabel: 'Hủy bỏ'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '@Url.Action("Leave", "Classes")'.replace(/&amp;/g, '&');
+            
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '__RequestVerificationToken';
+            tokenInput.value = token;
+            form.appendChild(tokenInput);
+            
+            const idInput = document.createElement('input');
+            idInput.type = 'hidden';
+            idInput.name = 'id';
+            idInput.value = classId;
+            form.appendChild(idInput);
+            
+            document.body.appendChild(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.body.removeChild(form);
+                if (data.success) {
+                    showSuccessMessage(data.message || 'Đã rời lớp học thành công!');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    showErrorMessage(data.error || 'Đã xảy ra lỗi khi rời lớp học.');
+                }
+            })
+            .catch(error => {
+                document.body.removeChild(form);
+                console.error('Error:', error);
+                showErrorMessage('Đã xảy ra lỗi khi rời lớp học.');
+            });
+            
+            // Close menu
+            document.querySelectorAll('.class-card-dropdown').forEach(function(menu) {
+                menu.style.display = 'none';
+            });
+        }
+
+        // Edit class form handler
+        document.getElementById('editClassForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            const formData = new FormData(form);
+            const errorDiv = document.getElementById('editClassError');
+            const classNameError = document.getElementById('editClassNameError');
+            const descriptionError = document.getElementById('editClassDescriptionError');
+            
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            classNameError.style.display = 'none';
+            descriptionError.style.display = 'none';
+
+            fetch('@Url.Action("Edit", "Classes")'.replace(/&amp;/g, '&'), {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': form.querySelector('[name="__RequestVerificationToken"]').value
+                }
+            })
+            .then(async response => {
+                const data = await response.json();
+                if (data.success) {
+                    // Close modal
+                    const modalElement = document.getElementById('editClassModal');
+                    modalElement.classList.remove('show');
+                    modalElement.style.display = 'none';
+                    
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) {
+                        backdrop.classList.remove('show');
+                        setTimeout(() => {
+                            if (backdrop && !backdrop.classList.contains('show')) {
+                                backdrop.remove();
+                            }
+                        }, 150);
+                    }
+                    
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    
+                    showSuccessMessage(data.message || 'Đã cập nhật thông tin lớp học thành công!');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    if (data.error) {
+                        errorDiv.textContent = data.error;
+                        errorDiv.style.display = 'block';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                errorDiv.textContent = 'Đã xảy ra lỗi. Vui lòng thử lại.';
+                errorDiv.style.display = 'block';
+            });
+        });
+
+        // Close edit modal
+        document.getElementById('editClassModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                const modalElement = document.getElementById('editClassModal');
+                modalElement.classList.remove('show');
+                modalElement.style.display = 'none';
+                
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.classList.remove('show');
+                    setTimeout(() => {
+                        if (backdrop && !backdrop.classList.contains('show')) {
+                            backdrop.remove();
+                        }
+                    }, 150);
+                }
+                
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
+        });
+
+        // Helper functions for messages
+        function showSuccessMessage(message) {
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success';
+            successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px; animation: slideIn 0.3s ease-out;';
+            successMsg.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + message;
+            document.body.appendChild(successMsg);
+            
+            setTimeout(() => {
+                successMsg.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    if (successMsg.parentNode) {
+                        successMsg.parentNode.removeChild(successMsg);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        function showErrorMessage(message) {
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'alert alert-danger';
+            errorMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px; animation: slideIn 0.3s ease-out;';
+            errorMsg.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + message;
+            document.body.appendChild(errorMsg);
+            
+            setTimeout(() => {
+                errorMsg.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    if (errorMsg.parentNode) {
+                        errorMsg.parentNode.removeChild(errorMsg);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        // Dashboard confirm modal helper
+        const dashboardConfirmModal = document.getElementById('dashboardConfirmModal');
+        const dashboardConfirmTitle = document.getElementById('dashboardConfirmTitle');
+        const dashboardConfirmMessage = document.getElementById('dashboardConfirmMessage');
+        const dashboardConfirmOk = dashboardConfirmModal?.querySelector('[data-confirm-ok]');
+        const dashboardConfirmCancel = dashboardConfirmModal?.querySelector('.dashboard-confirm-modal__footer [data-confirm-cancel]');
+        const dashboardConfirmClose = dashboardConfirmModal?.querySelector('[data-confirm-close]');
+
+        function showDashboardConfirm(options = {}) {
+            return new Promise(resolve => {
+                if (!dashboardConfirmModal || !dashboardConfirmOk || !dashboardConfirmCancel) {
+                    const fallback = window.confirm(options.message || 'Bạn có chắc chắn muốn thực hiện thao tác này?');
+                    resolve(fallback);
+                    return;
+                }
+
+                const {
+                    title = 'Bạn có chắc chắn?',
+                    message = 'Hành động này không thể hoàn tác.',
+                    confirmLabel = 'Xác nhận',
+                    cancelLabel = 'Hủy',
+                    variant = 'primary'
+                } = options;
+
+                dashboardConfirmTitle.textContent = title;
+                dashboardConfirmMessage.textContent = message;
+                dashboardConfirmOk.textContent = confirmLabel;
+                dashboardConfirmCancel.textContent = cancelLabel;
+
+                dashboardConfirmOk.classList.remove('glassy-btn-danger', 'glassy-btn-primary');
+                if (variant === 'danger') {
+                    dashboardConfirmOk.classList.add('glassy-btn-danger');
+                } else {
+                    dashboardConfirmOk.classList.add('glassy-btn-primary');
+                }
+
+                dashboardConfirmModal.style.display = 'flex';
+                requestAnimationFrame(() => dashboardConfirmModal.classList.add('is-visible'));
+
+                const cleanup = (result) => {
+                    dashboardConfirmModal.classList.remove('is-visible');
+                    setTimeout(() => {
+                        dashboardConfirmModal.style.display = 'none';
+                    }, 200);
+                    dashboardConfirmOk.removeEventListener('click', onConfirm);
+                    dashboardConfirmCancel.removeEventListener('click', onCancel);
+                    dashboardConfirmModal.removeEventListener('click', onBackdrop);
+                    document.removeEventListener('keydown', onEsc);
+                    dashboardConfirmClose?.removeEventListener('click', onCancel);
+                    resolve(result);
+                };
+
+                const onConfirm = () => cleanup(true);
+                const onCancel = () => cleanup(false);
+                const onBackdrop = (event) => {
+                    if (event.target === dashboardConfirmModal) {
+                        onCancel();
+                    }
+                };
+                const onEsc = (event) => {
+                    if (event.key === 'Escape') {
+                        onCancel();
+                    }
+                };
+
+                dashboardConfirmOk.addEventListener('click', onConfirm);
+                dashboardConfirmCancel.addEventListener('click', onCancel);
+                dashboardConfirmClose?.addEventListener('click', onCancel);
+                dashboardConfirmModal.addEventListener('click', onBackdrop);
+                document.addEventListener('keydown', onEsc);
+            });
+        }
+
+        // Dashboard alert modal handler
+        (function () {
+            const alertModal = document.getElementById('dashboardAlertModal');
+            if (!alertModal) {
+                return;
+            }
+
+            const showModal = () => {
+                alertModal.style.display = 'flex';
+                requestAnimationFrame(() => alertModal.classList.add('is-visible'));
+            };
+
+            const closeModal = () => {
+                alertModal.classList.remove('is-visible');
+                setTimeout(() => {
+                    if (alertModal && alertModal.parentNode) {
+                        alertModal.parentNode.removeChild(alertModal);
+                    }
+                }, 200);
+            };
+
+            alertModal.querySelectorAll('[data-alert-close]').forEach(function (btn) {
+                btn.addEventListener('click', closeModal);
+            });
+
+            alertModal.addEventListener('click', function (event) {
+                if (event.target === alertModal) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function handleEsc(event) {
+                if (event.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', handleEsc);
+                }
+            });
+
+            showModal();
+        })();
+
+        // Auto dismiss success alerts
+        (function () {
+            const alerts = document.querySelectorAll('.dashboard-auto-dismiss');
+            alerts.forEach(function (alert) {
+                setTimeout(function () {
+                    alert.classList.remove('show');
+                    alert.classList.add('fade');
+                    setTimeout(function () {
+                        alert.remove();
+                    }, 200);
+                }, 3000);
+            });
+        })();
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+

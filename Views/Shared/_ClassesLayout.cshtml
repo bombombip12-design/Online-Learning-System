@@ -1,0 +1,30 @@
+@{
+    Layout = "_DashboardLayout";
+    var classTabs = ViewBag.ClassTabs as IEnumerable<dynamic> ?? Array.Empty<dynamic>();
+}
+
+<div class="class-tabs-wrapper">
+    <div class="class-details-tabs">
+        @foreach (var tab in classTabs)
+        {
+            bool visible = tab.Visible is bool v ? v : true;
+            if (!visible)
+            {
+                continue;
+            }
+
+            var isActive = tab.Active is bool a && a;
+            <button type="button"
+                    class="class-tab-link @(isActive ? "active" : string.Empty)"
+                    data-tab-target="@tab.Key">
+                @tab.Label
+            </button>
+        }
+    </div>
+</div>
+
+<div class="class-layout-body">
+    @RenderBody()
+</div>
+
+@RenderSection("Scripts", required: false)

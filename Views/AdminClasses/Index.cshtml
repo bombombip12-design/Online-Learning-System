@@ -1,0 +1,186 @@
+﻿@{
+    Layout = "_AdminLayout";
+
+    ViewBag.Title = "Class Management";
+}
+@model List<Class>
+
+<div class="page-header">
+    <h2><i class="bi bi-book me-2"></i>Quản lý lớp học</h2>
+</div>
+
+<div class="mb-4">
+    <form asp-controller="AdminClasses" asp-action="Index" method="get" class="row g-3 align-items-center bg-white p-3 rounded shadow-sm">
+
+        <div class="col-md-5">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" name="search"
+                       placeholder="Tìm kiếm theo Tên lớp hoặc Chủ lớp..."
+                       value="@ViewBag.CurrentSearch">
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <select name="status" class="form-select form-select-lg">
+                <option value="">-- Lọc theo Trạng thái --</option>
+                <option value="Active" selected="@(ViewBag.CurrentStatus == "Active")">Active (Hoạt động)</option>
+                <option value="Non-active" selected="@(ViewBag.CurrentStatus == "Non-active")">Non-active (Ngưng hoạt động)</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <select name="isBlock" class="form-select form-select-lg">
+                <option value="">-- Lọc theo Khóa/Mở --</option>
+                <option value="false" selected="@(ViewBag.CurrentIsBlock == "false")">Chưa khóa</option>
+                <option value="true" selected="@(ViewBag.CurrentIsBlock == "true")">Đã khóa</option>
+            </select>
+        </div>
+
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-primary btn-lg w-100" title="Áp dụng bộ lọc">
+                <i class="bi bi-funnel"></i>
+            </button>
+        </div>
+    </form>
+</div>
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size: 1.1rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-bookmark me-2"></i>Tên lớp
+                        </th>
+                        <th style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-person-badge me-2"></i>Chủ lớp
+                        </th>
+                        <th class="text-center" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-info-circle me-2"></i>Trạng thái
+                        </th>
+                        <th class="text-center" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-lock me-2"></i>Khóa/Mở
+                        </th>
+                        <th style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-calendar me-2"></i>Ngày tạo
+                        </th>
+                        <th class="text-center" style="padding: 1.25rem 2rem; font-size: 1.15rem;">
+                            <i class="bi bi-gear me-2"></i>Hành động
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Model)
+
+                    {
+                        <tr style="vertical-align: middle;">
+                            <td class="ps-4 fw-semibold" style="padding: 1.25rem 2rem; font-size: 1.1rem;">@c.ClassName</td>
+                            <td style="padding: 1.25rem 2rem; font-size: 1.1rem;">@c.Owner.FullName</td>
+                            <td class="text-center" style="padding: 1.25rem 2rem;">
+                                @if (!string.IsNullOrEmpty(c.Status))
+
+                                {
+                                    <span class="badge @(c.Status == "Active" ? "bg-success" : "bg-secondary")" style="font-size: 1rem; padding: 0.5rem 0.75rem;">@c.Status</span>
+                                }
+
+                                else
+
+                                {
+                                    <span class="badge bg-secondary" style="font-size: 1rem; padding: 0.5rem 0.75rem;">Non-Active</span>
+                                }
+                            </td>
+                            <td class="text-center" style="padding: 1.25rem 2rem;">
+                                @if (c.IsBlock)
+
+                                {
+                                    <span class="badge bg-danger" style="font-size: 1rem; padding: 0.5rem 0.75rem;">
+                                        <i class="bi bi-lock me-1"></i>Đã khóa
+                                    </span>
+                                }
+
+                                else
+
+                                {
+                                    <span class="badge bg-success" style="font-size: 1rem; padding: 0.5rem 0.75rem;">
+                                        <i class="bi bi-unlock me-1"></i>Chưa khóa
+                                    </span>
+                                }
+                            </td>
+                            <td style="padding: 1.25rem 2rem; font-size: 1.1rem;">@c.CreatedAt.ToString("dd/MM/yyyy")</td>
+                            <td class="text-center" style="padding: 1.25rem 2rem;">
+                                <div class="btn-group" role="group">
+                                    <a href="/AdminClasses/Details/@c.Id" class="btn btn-outline-secondary" title="Xem chi tiết" style="padding: 0.5rem 0.75rem; font-size: 1.1rem;">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button type="button"
+                                            class="btn @(c.IsBlock ? "btn-outline-success" : "btn-outline-warning")"
+                                            title="@((c.IsBlock) ? "Mở lớp" : "Khóa lớp")"
+                                            style="padding: 0.5rem 0.75rem; font-size: 1.1rem;"
+                                            onclick="showToggleBlockModal(@c.Id, '@c.ClassName', '@c.Owner.FullName', @c.IsBlock.ToString().ToLower())">
+                                        <i class="bi @(c.IsBlock ? "bi-unlock" : "bi-lock")"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal xác nhận khóa/mở lớp -->
+<div class="modal fade" id="toggleBlockModal" tabindex="-1" aria-labelledby="toggleBlockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="toggleBlockModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Xác nhận thay đổi trạng thái khóa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Bạn có chắc chắn muốn <strong id="toggleActionText"></strong> lớp học sau đây?</p>
+                <div class="alert alert-info mb-0">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-bookmark me-2"></i>
+                        <strong>Tên lớp:</strong>
+                        <span class="ms-2" id="toggleClassName"></span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-person-badge me-2"></i>
+                        <strong>Chủ lớp:</strong>
+                        <span class="ms-2" id="toggleOwnerName"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Hủy
+                </button>
+                <a id="toggleBlockConfirmBtn" href="#" class="btn btn-warning">
+                    <i class="bi bi-check-circle me-1"></i>Xác nhận
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showToggleBlockModal(classId, className, ownerName, isBlock) {
+        const action = isBlock ? 'mở' : 'khóa';
+        const actionText = isBlock ? 'mở' : 'khóa';
+
+        document.getElementById('toggleActionText').textContent = actionText;
+        document.getElementById('toggleClassName').textContent = className;
+        document.getElementById('toggleOwnerName').textContent = ownerName;
+
+        const confirmBtn = document.getElementById('toggleBlockConfirmBtn');
+        confirmBtn.href = '/AdminClasses/ToggleBlock/' + classId;
+        confirmBtn.className = isBlock ? 'btn btn-success' : 'btn btn-warning';
+
+        const modal = new bootstrap.Modal(document.getElementById('toggleBlockModal'));
+        modal.show();
+    }
+</script>

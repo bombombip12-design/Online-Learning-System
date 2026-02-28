@@ -1,0 +1,189 @@
+@model FinalASB.ViewModels.LoginViewModel
+@{
+    ViewData["Title"] = "Đăng nhập";
+}
+
+<div class="glassy-auth-container">
+    <div class="glassy-form-wrapper">
+        <div class="glassy-form">
+            <div class="text-center mb-4">
+                <h2 class="glassy-title mb-2">Đăng nhập</h2>
+                <p class="glassy-subtitle">Điền thông tin bên dưới để đăng nhập</p>
+            </div>
+            <form asp-action="Login" method="post">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4 validation-summary" style="display: none;"></div>
+                <div class="glassy-input-group mb-3">
+                    <label asp-for="Email" class="glassy-label">Email</label>
+                    <div class="glassy-input-wrapper">
+                        <input asp-for="Email" class="glassy-input" placeholder="Nhập email của bạn" />
+                        <i class="fas fa-user glassy-input-icon"></i>
+                    </div>
+                    <span asp-validation-for="Email" class="text-danger small d-block mt-1"></span>
+                </div>
+                <div class="glassy-input-group mb-3">
+                    <label asp-for="Password" class="glassy-label">Mật khẩu</label>
+                    <div class="glassy-input-wrapper">
+                        <input asp-for="Password" class="glassy-input" placeholder="Nhập mật khẩu" />
+                        <i class="fas fa-lock glassy-input-icon"></i>
+                    </div>
+                    <span asp-validation-for="Password" class="text-danger small d-block mt-1"></span>
+                </div>
+                <div class="glassy-options mb-4">
+                    <div class="form-check">
+                        <input asp-for="RememberMe" class="form-check-input" type="checkbox" id="rememberMe" />
+                        <label class="form-check-label" for="rememberMe">Ghi nhớ đăng nhập</label>
+                    </div>
+                </div>
+                <div class="d-grid mb-3">
+                    <button type="submit" class="glassy-btn">
+                        Đăng nhập
+                    </button>
+                </div>
+            </form>
+            <div class="text-center mt-4 pt-3 glassy-footer">
+                <p class="mb-0">Chưa có tài khoản? 
+                    <a asp-action="Register" class="glassy-link">Đăng ký ngay</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    @if (ViewBag.AccountLockedMessage != null)
+    {
+        <div class="account-locked-modal" id="accountLockedModal" role="alertdialog" aria-labelledby="accountLockedLabel" aria-modal="true">
+            <div class="account-locked-modal__dialog">
+                <div class="account-locked-modal__header">
+                    <h5 class="account-locked-modal__title" id="accountLockedLabel">Thông báo</h5>
+                    <button type="button" class="account-locked-modal__close" data-modal-close aria-label="Đóng thông báo">&times;</button>
+                </div>
+                <div class="account-locked-modal__body">
+                    @ViewBag.AccountLockedMessage
+                </div>
+                <div class="account-locked-modal__footer">
+                    <button type="button" class="glassy-btn" data-modal-close>Đóng</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        // Chỉ hiển thị validation summary khi có lỗi
+        document.addEventListener('DOMContentLoaded', function() {
+            const validationSummary = document.querySelector('.validation-summary');
+            if (validationSummary) {
+                // Kiểm tra xem có lỗi không (có text hoặc có thẻ ul với li)
+                const hasErrors = validationSummary.textContent.trim().length > 0 || 
+                                 validationSummary.querySelector('ul li');
+                if (hasErrors) {
+                    validationSummary.style.display = 'block';
+                } else {
+                    validationSummary.style.display = 'none';
+                }
+            }
+            
+            // Ẩn các thông báo lỗi trống
+            document.querySelectorAll('span.field-validation-error').forEach(function(span) {
+                if (!span.textContent.trim()) {
+                    span.style.display = 'none';
+                }
+            });
+
+            var accountLockedModal = document.getElementById('accountLockedModal');
+            if (accountLockedModal) {
+                accountLockedModal.style.display = 'flex';
+                accountLockedModal.classList.add('is-visible');
+
+                accountLockedModal.querySelectorAll('[data-modal-close]').forEach(function(btn) {
+                    btn.addEventListener('click', function () {
+                        accountLockedModal.classList.remove('is-visible');
+                        setTimeout(function () {
+                            accountLockedModal.remove();
+                        }, 150);
+                    });
+                });
+
+                accountLockedModal.addEventListener('click', function (event) {
+                    if (event.target === accountLockedModal) {
+                        accountLockedModal.querySelector('[data-modal-close]').click();
+                    }
+                });
+            }
+        });
+    </script>
+    <style>
+        .account-locked-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1050;
+            padding: 1rem;
+        }
+
+        .account-locked-modal.is-visible .account-locked-modal__dialog {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .account-locked-modal__dialog {
+            background: #fff;
+            border-radius: 1rem;
+            width: min(420px, 100%);
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.3);
+            overflow: hidden;
+            transform: translateY(30px);
+            opacity: 0;
+            transition: all 0.25s ease;
+        }
+
+        .account-locked-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .account-locked-modal__title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .account-locked-modal__close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
+            cursor: pointer;
+            color: #64748b;
+            transition: color 0.2s ease;
+        }
+
+        .account-locked-modal__close:hover {
+            color: #ef4444;
+        }
+
+        .account-locked-modal__body {
+            padding: 1.25rem;
+            color: #0f172a;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .account-locked-modal__footer {
+            padding: 0 1.25rem 1.25rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .account-locked-modal .glassy-btn {
+            min-width: 120px;
+        }
+    </style>
+}

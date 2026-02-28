@@ -1,0 +1,158 @@
+﻿@model Class
+@{
+    Layout = "_AdminLayout";
+
+    ViewBag.Title = "Class Management";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-pencil-square me-2"></i>Sửa thông tin lớp học</h2>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-5">
+                <form method="post" asp-controller="AdminClasses" asp-action="Edit">
+                    @Html.AntiForgeryToken()
+                    @if (ViewData.ModelState.ErrorCount > 0)
+
+                    {
+                        <div asp-validation-summary="All" class="alert alert-danger mb-4"></div>
+                    }
+
+                    <input type="hidden" asp-for="Id" />
+                    <input type="hidden" asp-for="OwnerId" />
+                    <input type="hidden" asp-for="JoinCode" />
+                    <input type="hidden" asp-for="CreatedAt" />
+                    <input type="hidden" asp-for="IsBlock" />
+
+                    <div class="row g-4">
+                        <div class="col-12">
+                            <label asp-for="ClassName" class="form-label fw-semibold">
+                                <i class="bi bi-bookmark me-2"></i>Tên lớp <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light" style="min-width: 50px;">
+                                    <i class="bi bi-bookmark"></i>
+                                </span>
+                                <input asp-for="ClassName" class="form-control form-control-lg" placeholder="Nhập tên lớp học" />
+                            </div>
+                            <span asp-validation-for="ClassName" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-12">
+                            <label asp-for="Description" class="form-label fw-semibold">
+                                <i class="bi bi-card-text me-2"></i>Mô tả
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light align-items-start" style="min-width: 50px; padding-top: 0.75rem;">
+                                    <i class="bi bi-card-text"></i>
+                                </span>
+                                <textarea asp-for="Description" class="form-control" rows="5" placeholder="Nhập mô tả lớp học (tùy chọn)" style="resize: vertical;"></textarea>
+                            </div>
+                            <span asp-validation-for="Description" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-12">
+                            <label asp-for="Status" class="form-label fw-semibold">
+                                <i class="bi bi-info-circle me-2"></i>Trạng thái <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light" style="min-width: 50px;">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                                <select asp-for="Status" class="form-select form-select-lg">
+                                    <option value="Active" selected="@(Model.Status == "Active")">Active</option>
+                                    <option value="Non-Active" selected="@(Model.Status == "Non-Active")">Non-Active</option>
+                                </select>
+                            </div>
+                            <span asp-validation-for="Status" class="text-danger small"></span>
+                        </div>
+
+                    </div>
+
+                    <hr class="my-5">
+
+                    <div class="d-flex gap-3 justify-content-end mt-4">
+                        <a href="/AdminClasses/SelectToEdit" class="btn btn-outline-secondary px-4">
+                            <i class="bi bi-x-circle me-2"></i>Hủy
+                        </a>
+                        <button type="button" class="btn btn-primary px-5" onclick="showSaveConfirmModal()">
+                            <i class="bi bi-check-circle me-2"></i>Lưu thay đổi
+                        </button>
+                        <button type="submit" id="hiddenSubmitBtn" style="display: none;"></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal xác nhận lưu thay đổi -->
+<div class="modal fade" id="saveConfirmModal" tabindex="-1" aria-labelledby="saveConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="saveConfirmModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Xác nhận lưu thay đổi
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Bạn có chắc chắn muốn lưu thay đổi cho lớp học sau đây?</p>
+                <div class="alert alert-info mb-0">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-bookmark me-2"></i>
+                        <strong>Tên lớp:</strong>
+                        <span class="ms-2" id="saveClassName">@Model.ClassName</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-person-badge me-2"></i>
+                        <strong>Chủ lớp:</strong>
+                        <span class="ms-2" id="saveOwnerName">@Model.Owner.FullName</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Hủy
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmSubmit()">
+                    <i class="bi bi-check-circle me-1"></i>Xác nhận
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        function showSaveConfirmModal() {
+            // Kiểm tra validation trước
+            const form = document.querySelector('form');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('saveConfirmModal'));
+            modal.show();
+        }
+
+        function confirmSubmit() {
+            // Đóng modal trước
+            const modalElement = document.getElementById('saveConfirmModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
+
+            // Submit form bằng cách click vào button submit ẩn
+            document.getElementById('hiddenSubmitBtn').click();
+        }
+    </script>
+}
